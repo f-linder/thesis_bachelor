@@ -1,8 +1,7 @@
-from enum import Enum
-from datetime import datetime
 import os
-import pandas as pd
 import yfinance as yf
+import pandas as pd
+from enum import Enum
 
 
 class Index(Enum):
@@ -10,40 +9,37 @@ class Index(Enum):
     SP500 = 2
 
 
-def download_all(index, interval='1d', start_date=datetime(2015, 10, 15),
-                 end_date=datetime(2023, 10, 15)):
-    input_file = ''
+def download_index(index, start_date, end_date, interval='1d'):
     if index == Index.SP100:
-        print('Starting download for all S&P100 constituents...')
-        input_file = './data/sp100.csv'
-    elif index == Index.SP500:
-        print('Starting download for all S&P500 constituents...')
-        input_file = './data/sp500.csv'
-    else:
-        raise Exception('index not found')
+        print('Selected S&P100 data set')
+        tickers = pd.read_csv('./data/sp100.csv')['Symbol']
+        download_tickers(tickers, start_date, end_date, interval)
+        return tickers
 
-    df = pd.read_csv(input_file)
-    tickers = df['Symbol'].tolist()
+    elif index == Index.SP500:
+        print('Selected S&P500 data set')
+        tickers = pd.read_csv('./data/sp500.csv')['Symbol']
+        download_tickers(tickers, start_date, end_date, interval)
+        return tickers
+
+
+def download_tickers(tickers, start_date, end_date, interval='1d'):
+    print(f'Starting download for data of {len(tickers)} tickers...')
 
     for i, ticker in enumerate(tickers):
         print(f'Downloading {ticker}: {i + 1}/{len(tickers)}')
-        download(ticker, interval, start_date, end_date)
 
+        # [Date, Open, High, Low, Close, Adj Close, Volume]
+        data = yf.download(ticker, interval=interval, start=start_date,
+                           end=end_date, progress=False)
 
+        data['Return Abs'] = data['Close'] - data['Open']
+        data['Returns'] = data['Return Abs'] / data['Open'] * 100
 
-def download(ticker, interval='1d', start_date=datetime(2015, 10, 15),
-             end_date=datetime(2023, 10, 15)):
-    # [Date, Open, High, Low, Close, Adj Close, Volume]
-    data = yf.download(ticker, interval=interval, start=start_date,
-                       end=end_date, progress=False)
+        if not data.empty:
+            data['Returns'].to_csv(f'./data/{ticker}.csv')
 
-    data['Return Abs'] = data['Close'] - data['Open']
-    data['Return Rel'] = data['Return Abs'] / data['Open'] * 100
-
-    data.drop(['High', 'Low', 'Volume', 'Adj Close'], axis=1, inplace=True)
-
-    if not data.empty:
-        data.to_csv(f'./data/{ticker}.csv')
+    print('Download complete')
 
 
 def clean_up():
