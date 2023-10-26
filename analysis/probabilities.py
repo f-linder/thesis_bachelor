@@ -1,52 +1,66 @@
 from sklearn.neighbors import KernelDensity, NearestNeighbors
+from scipy.special import gamma
 import math
 import numpy as np
 
 
 class KDE:
-    def __init__(self, _kernel='gaussian', _bandwidth='silverman'):
-        self.kernel = _kernel
-        self.bandwidth = _bandwidth
+    def __init__(self, kernel='gaussian', bandwidth='silverman'):
+        self.kernel = kernel
+        self.bandwidth = bandwidth
 
 
 class KNN:
-    def __init__(self, _k=None):
-        self.k = _k
+    def __init__(self, k=None):
+        self.k = k
 
 
-def get_KNN(returns, k):
-    k = k if k else math.ceil(np.sqrt(len(returns[0])) / 2)
-    knn = NearestNeighbors(n_neighbors=k).fit(returns)
-    return knn
-
-
-def get_KDE(returns, kernel, bandwidth):
-    kde = KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(returns)
-    return kde
-
-
-def pdf(returns, estimator):
+def pdf_joint(estimator, returns):
+    # use kernel density estimator
     if isinstance(estimator, KDE):
-        knn = get_KDE(returns, estimator.kernel, estimator.bandwidth)
+        kde = KernelDensity(kernel=estimator.kernel, bandwidth=estimator.bandwidth).fit(returns)
 
         def density_function(values):
-            log_density = knn.score_samples([values])
+            log_density = kde.score([list(values)])
             density = np.exp(log_density)
             return density
 
         return density_function
 
+    # use k nearest neighbor estimator
     elif isinstance(estimator, KNN):
-        kde = get_KNN(returns, estimator.k)
-        n_samples = kde.n_samples_fit_
-        k = estimator.k if estimator.k else math.ceil(np.sqrt(n_samples) / 2)
+        n = len(returns)
+        d = len(returns[0])
+        k = estimator.k if estimator.k else math.ceil(np.sqrt(n) / 2)
+        knn = NearestNeighbors(n_neighbors=k).fit(returns)
 
         def density_function(values):
-            distances, _ = estimator.kneighbors([values])
-            v = np.max(distances)
-            return k / (n_samples * v)
+            distances, _ = knn.kneighbors([list(values)])
+            radius = np.max(distances)
+            # volume of d-dimensional hypersphere
+            volume = (np.pi ** (d / 2) / gamma(d / 2 + 1)) * (radius ** d)
+            return k / (n * volume)
 
         return density_function
 
-# TODO: pdf with condition
 
+# Pr(A|B) = Pr(A,B) / Pr(B)
+# Pr(joint|cond) = Pr(all) / Pr(cond)
+def pdf(estimator, returns_joint, returns_cond=None):
+    if returns_cond is not None:
+        returns_all = np.hstack((returns_joint, returns_cond))
+
+        density_all = pdf_joint(estimator, returns_all)
+        density_cond = pdf_joint(estimator, returns_cond)
+
+        def density_function(*values):
+            return density_all(values) / density_cond(values[len(returns_all[0]) - len(returns_cond[0]):])
+
+        return density_function
+    else:
+        density = pdf_joint(estimator, returns_joint)
+
+        def density_function(*values):
+            return density(values)
+
+        return density_function
