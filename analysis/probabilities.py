@@ -21,7 +21,7 @@ def pdf_joint(estimator, returns):
         kde = KernelDensity(kernel=estimator.kernel, bandwidth=estimator.bandwidth).fit(returns)
 
         def density_function(values):
-            log_density = kde.score([list(values)])
+            log_density = kde.score([values])
             density = np.exp(log_density)
             return density
 
@@ -35,7 +35,7 @@ def pdf_joint(estimator, returns):
         knn = NearestNeighbors(n_neighbors=k).fit(returns)
 
         def density_function(values):
-            distances, _ = knn.kneighbors([list(values)])
+            distances, _ = knn.kneighbors([values])
             radius = np.max(distances)
             # volume of d-dimensional hypersphere
             volume = (np.pi ** (d / 2) / gamma(d / 2 + 1)) * (radius ** d)
@@ -44,8 +44,6 @@ def pdf_joint(estimator, returns):
         return density_function
 
 
-# Pr(A|B) = Pr(A,B) / Pr(B)
-# Pr(joint|cond) = Pr(all) / Pr(cond)
 def pdf(estimator, returns_joint, returns_cond=None):
     if returns_cond is not None:
         returns_all = np.hstack((returns_joint, returns_cond))
@@ -53,7 +51,10 @@ def pdf(estimator, returns_joint, returns_cond=None):
         density_all = pdf_joint(estimator, returns_all)
         density_cond = pdf_joint(estimator, returns_cond)
 
+        # Pr(A|B) = Pr(A,B) / Pr(B)
         def density_function(*values):
+            # one value is no tuple, therefore list(values) errors
+            values = [values] if not isinstance(values, tuple) else list(values)
             return density_all(values) / density_cond(values[len(returns_all[0]) - len(returns_cond[0]):])
 
         return density_function
