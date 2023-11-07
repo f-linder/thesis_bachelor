@@ -24,12 +24,11 @@ class AR:
             # assign coefficients randomly across all orders and variables
             for var in range(self.m):
                 n_predictors = np.random.randint(0, max_predictors + 1)
-
                 all_pairs = [(o, d) for o in range(self.order) for d in range(n_predictors)]
                 np.random.shuffle(all_pairs)
 
                 for (random_order, random_var) in all_pairs[:n_predictors]:
-                    coefficients[random_order][random_var][var] = np.random.randn()
+                    coefficients[random_order][var][random_var] = np.random.randn()
 
             # companion matrix F, converting VAR(p) into VAR(1)
             F_upper = np.hstack(coefficients)
@@ -44,7 +43,6 @@ class AR:
         self.generated = True
 
 
-    # simulate stationary timeseries for n_steps steps
     def simulate(self, n_steps, file_name=None):
         if not self.generated:
             self.generate(self.m / 2)
@@ -60,7 +58,8 @@ class AR:
             for i in range(self.order):
                 sum += np.dot(self.coefficients[i], timeseries[t - 1 - i, :])
 
-            noise = np.full(self.m, np.random.randn())
+            noise = np.random.randn(self.m)
+
             timeseries[t, :] = sum + noise
 
         # cut randomly generated values
@@ -76,13 +75,13 @@ class AR:
 
 
     def __repr__(self):
-        rep = f'VAR({self.order}) model with {self.m} processes\n'
+        rep = f'VAR({self.order}): '
         rep += 'X_t = '
         for i in range(self.order):
             rep += f'C_{i + 1} * X_t-{i + 1} + '
-        rep += 'N_t with:\n'
+        rep += 'N_t\n'
 
         for i in range(self.order):
-            rep += f'C_t-{1 + i} = ' + self.coefficients[i].__repr__() + '\n'
+            rep += f'C_t-{1 + i} = \n' + self.coefficients[i].__repr__() + '\n'
 
         return rep
