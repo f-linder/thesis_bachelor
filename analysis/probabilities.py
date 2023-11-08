@@ -6,7 +6,7 @@ import numpy as np
 
 # Kernel Density Estimator
 class KDE:
-    def __init__(self, kernel='gaussian', bandwidth='silverman'):
+    def __init__(self, kernel='exponential', bandwidth='silverman'):
         self.kernel = kernel
         self.bandwidth = bandwidth
 
