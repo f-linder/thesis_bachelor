@@ -10,6 +10,19 @@ class Index(Enum):
 
 
 def download_index(index, start_date, end_date, interval='1d'):
+    """
+    Download historical stock price data for a specified index.
+
+    Parameters:
+    - index (Index): An Index enum value (SP100 or SP500).
+    - start_date (datetime): The start date for data download.
+    - end_date (datetime): The end date for data download.
+    - interval (str): The data interval (default is '1d' for daily).
+
+    Returns:
+    - tickers (list): A list of ticker symbols downloaded for specified index.
+    """
+
     if index == Index.SP100:
         print('Selected S&P100 data set')
         tickers = pd.read_csv('./data/sp100.csv')['Symbol']
@@ -24,6 +37,19 @@ def download_index(index, start_date, end_date, interval='1d'):
 
 
 def download_tickers(tickers, start_date, end_date, interval='1d'):
+    """
+    Download historical stock price data for a list of ticker symbols.
+
+    Parameters:
+    - tickers (list): A list of ticker symbols to download.
+    - start_date (datetime): The start date for data download.
+    - end_date (datetime): The end date for data download.
+    - interval (str): The data interval (default is '1d' for daily).
+
+    Returns:
+    - None
+    """
+
     print(f'Starting download for data of {len(tickers)} tickers...')
 
     for i, ticker in enumerate(tickers):
@@ -43,11 +69,24 @@ def download_tickers(tickers, start_date, end_date, interval='1d'):
 
 
 def clean_up():
-    dir_path = './data'
+    """
+    Clean up downloaded data files, excluding specific files and directories.
 
+    Parameters:
+    - None
+
+    Returns:
+    - None
+    """
+
+    dir_path = './data'
     for filename in os.listdir(dir_path):
-        if filename == 'sp100.csv' or filename == 'sp500.csv':
+        if filename in ['sp100.csv', 'sp500.csv', 'simulations']:
             continue
         os.remove(os.path.join(dir_path, filename))
 
-    print('Clean up complete: removed all ticker csv files')
+    dir_path = '.data/simulations'
+    for filename in os.listdir(dir_path):
+        os.remove(os.path.join(dir_path, filename))
+
+    print('Clean up complete: removed all .csv files')

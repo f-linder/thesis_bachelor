@@ -3,11 +3,26 @@ import pandas as pd
 import numpy as np
 
 
-# estimation of directed information with memory of size l (= order)
-# I(X -> Y || Z) = 1/T Sum_t=1^T I(Y_t, X_t-l^t-1 | Y_t-l^t-1, Z_t-l^t-1)
-#                = 1/T Sum_t=1^T H(Y_t, Y_t-l^t-1, Z_t-l^t-1) + H(X_t-l^t-1, Y_t-l^t-1, Z_t-l^t-1)
-#                   - H(Y_t, Y_t-l^t-1, X_t-l^t-1 Z_t-l^t-1) - H(Y_t-l^t-1, Z_t-l^t-1)
 def directed_information(X, Y, Z=None, order=1, estimator=prob.KNN()):
+    """
+    Estimate I(X -> Y || Z), the Directed Information between two time series X and Y 
+    causally conditioned on a set of time series Z with memory of size l / order.
+
+    I(X -> Y || Z) = Sum_t=1^T I(Y_t, X_t-l^t-1 | Y_t-l^t-1, Z_t-l^t-1)
+                   = Sum_t=1^T H(Y_t, Y_t-l^t-1, Z_t-l^t-1) + H(X_t-l^t-1, Y_t-l^t-1, Z_t-l^t-1)
+                     - H(Y_t, Y_t-l^t-1, X_t-l^t-1 Z_t-l^t-1) - H(Y_t-l^t-1, Z_t-l^t-1)
+
+    Parameters:
+    - X (numpy.ndarray): The first time series (X).
+    - Y (numpy.ndarray): The second time series (Y).
+    - Z (numpy.ndarray or None): The set of time series causally conditioned on (Z).
+    - order (int): The memory (or lag) for DI estimation (default is 1).
+    - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
+
+    Returns:
+    - di (float): The estimated Directed Information between X and
+    """
+
     Z = Z if Z is not None else [[] for _ in range(len(X) - order)]
 
     # (X_t-l^t-1)
@@ -21,7 +36,7 @@ def directed_information(X, Y, Z=None, order=1, estimator=prob.KNN()):
     ytyxz = np.hstack((Y[order:], Y_lagged, X_lagged, Z_lagged))
     yz = np.hstack((Y_lagged, Z_lagged))
 
-    # density funcitons corresponding to entropy terms
+    # density functions corresponding to entropy terms
     pdf_ytyz = prob.pdf(estimator, ytyz)
     pdf_xyz = prob.pdf(estimator, xyz)
     pdf_ytyxz = prob.pdf(estimator, ytyxz)
@@ -32,14 +47,36 @@ def directed_information(X, Y, Z=None, order=1, estimator=prob.KNN()):
 
     for t in range(T):
         # compute mutual information I(Y_t, X_t-l^t-1 | Y_t-l^t-1, Z_t-l^t-1)
-        mi = -np.log(pdf_ytyz(ytyz[t])) - np.log(pdf_xyz(xyz[t])) + np.log(pdf_ytyxz(ytyxz[t])) + np.log(pdf_yz(yz[t]))
+        # using entropy terms
+        h_ytyz = -np.log(pdf_ytyz(ytyz[t]))
+        h_xyz = -np.log(pdf_xyz(xyz[t]))
+        h_ytyxz = -np.log(pdf_ytyxz(ytyxz[t]))
+        h_yz = -np.log(pdf_yz(yz[t]))
+
+        mi = h_ytyz + h_xyz - h_ytyxz - h_yz
+
         di += mi
 
-    return di / T
+    return di
 
 
-# assess time-varying directed information
 def rolling_window(window_size, step_size, X, Y, Z=None, order=1, estimator=prob.KNN()):
+    """
+    Estimate time-varying Directed Information using a rolling window approach.
+
+    Parameters:
+    - window_size (int): The size of the rolling window.
+    - step_size (int): The step size for moving the rolling window.
+    - X (numpy.ndarray): The first time series (X).
+    - Y (numpy.ndarray): The second time series (Y).
+    - Z (numpy.ndarray or None): The third time series (Z), or None if not conditioned on Z.
+    - order (int): The memory order (lag) for DI estimation (default is 1).
+    - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
+
+    Returns:
+    - di (list): A list of time-varying Directed Information values estimated for each window.
+    """
+
     di = []
     num_steps = (len(X) - window_size) // step_size
 
@@ -67,12 +104,24 @@ def rolling_window(window_size, step_size, X, Y, Z=None, order=1, estimator=prob
     return di
 
 
-# transforms list of return samples (X_t, Y_t, Z_t, ...) with corresponding
-# lag pairs = [(f0, l0), (f1, l1), (f2, l2), ...] with f_i < l_i
-# to (X_t-l0^t-f0, Y_t-l1^t-f2, Z_t-l2^t-f2, ...) or in python notation
-# (X[t-l0 : t-f0+1], Y[t-l1 : t-f1+1], Z[t-l2 : t-f2+1], ...)
-# lag pairs denote when in the past to start (t - l_i) and when to end (t - f_i)
 def get_lagged_returns(returns, lags):
+    """
+    Transform a list of return samples with corresponding lag pairs into 
+    lagged time series data.
+    Example:
+    Turns (X_t, Y_t, Z_t, ...) with [(f0, l0), (f1, l1), (f2, l2), ...]
+    into (X_t-l0^t-f0, Y_t-l1^t-f2, Z_t-l2^t-f2, ...) or in python notation
+    (X[t-l0 : t-f0+1], Y[t-l1 : t-f1+1], Z[t-l2 : t-f2+1], ...)
+
+
+    Parameters:
+    - returns (numpy.ndarray): List of return samples.
+    - lags (list of tuples): List of lag pairs [(f0, l0), (f1, l1), (f2, l2), ...] with f_i < l_i.
+
+    Returns:
+    - lagged_returns (numpy.ndarray): Lagged time series data.
+    """
+
     n_features = len(returns[0])
     max_lag = max([t[1] for t in lags]) if lags != [] else 0
 

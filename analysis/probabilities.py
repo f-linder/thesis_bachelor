@@ -17,10 +17,18 @@ class KNN:
         self.k = k
 
 
-# probability density function Pr(X=x, Y=y, ...)
-# for list of return samples [[x1, y1, ...], [x2,y2, ...], ...]
 def pdf(estimator, returns):
-    # use kernel density estimator
+    """
+    Calculate the joint probability density function (PDF) for a given
+    estimator and sample data.
+
+    Parameters:
+    - estimator (KDE or KNN): The estimator used.
+    - returns (list of lists): List of return samples of the form [[x1, y1, ...], [x2, y2, ...], ...]
+
+    Returns:
+    - density_function (function): A function taking a list of values [x, y, ...] and calculating Pr(X=x, Y=y, ...)
+    """
     if isinstance(estimator, KDE):
         kde = KernelDensity(kernel=estimator.kernel, bandwidth=estimator.bandwidth)
         kde.fit(returns)
@@ -32,7 +40,6 @@ def pdf(estimator, returns):
 
         return density_function
 
-    # use k nearest neighbor estimator
     elif isinstance(estimator, KNN):
         n = len(returns)
         d = len(returns[0])
