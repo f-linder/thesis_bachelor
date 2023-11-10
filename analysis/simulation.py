@@ -21,6 +21,7 @@ class VAR:
         self.order = order
         self.coefficients = []
         self.generated = False
+        self.timeseries = []
 
 
     def generate(self, max_predictors):
@@ -71,13 +72,14 @@ class VAR:
         if not self.generated:
             self.generate(self.m / 2)
 
-        timeseries = np.zeros((n_steps + self.order, self.m))
+        # extra steps to ensure stationarity of timeseries
+        n_stationary = 300
+        timeseries = np.zeros((n_stationary + n_steps + + self.order, self.m))
         # first order values are random ~N(0,1)
         timeseries[:self.order, :] = np.random.randn(self.order, self.m)
 
-        # TODO: ask whether to generate more steps and only return
         # timeseries when stationarity reached
-        for t in range(self.order, n_steps + self.order):
+        for t in range(self.order, n_steps + n_stationary + self.order):
             sum = np.zeros(self.m)
             for i in range(self.order):
                 sum += np.dot(self.coefficients[i], timeseries[t - 1 - i, :])
@@ -86,8 +88,8 @@ class VAR:
 
             timeseries[t, :] = sum + noise
 
-        # cut randomly generated values
-        timeseries = timeseries[self.order:]
+        # cut off time to stationarity
+        self.timeseries = timeseries[n_stationary:]
 
         # safe to ./data/simulation if file_name given
         if file_name is not None:
@@ -95,33 +97,19 @@ class VAR:
             df.index = range(n_steps)
             df.to_csv(f'./data/simulations/{file_name}.csv')
 
-        return timeseries.transpose()
+        return self.timeseries[self.order:]
 
 
-    def cov(self):
-        """
-        Calculate the covariance matrix of the VAR model.
-
-        Returns:
-        - cov_matrix (numpy.ndarray): Covariance matrix of shape (m, m).
-        """
-
-        F = self.get_VAR1()
-        F_noise = np.zeros((self.m * self.order, self.m * self.order))
-        F_noise[:self.m, :self.m] = np.eye(self.m)
-
-        return solve_discrete_lyapunov(F, F_noise)[:self.m, :self.m]
-
-
-    # DI(X_i -> X_j || Z) = log (sd(N_t) / sd(N_t'))
-    # one model with X_i and one without
-    # X_t = F * X_t-1 + N_t
-    # X_t = F' * X_t-1,' + N_t' where F' and X_t-1' do not include X_i
-    # directed information as 
     def directed_information(self, x, y, z=[]):
         """
-        Calculate I(X -> Y || Z), the Directed Information (DI) from variable X to Z
+        Calculate I(X -> Y || Z), the Directed Information (DI) from variable X to Y
         causally conditioned on a set of variables Z.
+        I(X -> Y || Z) = H(Y || Z) - H(Y || X, Z)
+                       = log (std(N_t') / std(N_t))
+        where H(Y || X, Z) = 0.5 * log (2 * pi * e * std(N_t)^2)
+        Comparing two models, one given X and Z another one only given Z:
+        Y_t = a * Y_t-1 + b * Z_t-1 + c * X_t-1 + ... + N_t
+        Y_t = a' * Y_t-1 + b' * Z_t-1 + ... + N_t'
 
         Parameters:
         - x (int): Index of the source variable X.
@@ -132,28 +120,35 @@ class VAR:
         - di (float): The calculated Directed Information.
         """
 
-        cov = self.cov()
+        steps = len(self.timeseries) - self.order
+        # calculated with values of real simulation
+        predicted_yxz = np.zeros((steps, 2 + len(z)))
+        predicted_yz = np.zeros((steps, 1 + len(z)))
 
-        # sets of indices corresponding to processes
-        xz = [x] + z
+        yxz = [y] + [x] + z
         yz = [y] + z
-        xyz = [x] + [y] + z
 
-        # covariance submatrices
-        cov_xz = np.array([[cov[i, j] for j in xz] for i in xz])
-        cov_yz = np.array([[cov[i, j] for j in yz] for i in yz])
-        cov_xyz = np.array([[cov[i, j] for j in xyz] for i in xyz])
-        cov_z = np.array([[cov[i, j] for j in z] for i in z])
+        for t in range(steps):
+            sum_yxz = np.zeros(2 + len(z))
+            sum_yz = np.zeros(1 + len(z))
 
-        h_xz = 0.5 * np.log((2 * np.pi * np.e)**len(xz) * np.linalg.det(cov_xz))
-        h_yz = 0.5 * np.log((2 * np.pi * np.e)**len(yz) * np.linalg.det(cov_yz))
-        h_xyz = 0.5 * np.log((2 * np.pi * np.e)**len(xyz) * np.linalg.det(cov_xyz))
-        h_z = 0.5 * np.log((2 * np.pi * np.e)**len(z) * np.linalg.det(cov_z)) if z != [] else 0
+            for i in range(self.order):
+                sum_yxz += np.dot(self.coefficients[i][np.ix_(yxz, yxz)], self.timeseries[self.order - 1 + t - i, yxz])
+                sum_yz += np.dot(self.coefficients[i][np.ix_(yz, yz)], self.timeseries[self.order - 1 + t - i, yz])
 
-        print(f'H(X,Z)=={h_xz}, H(Y,Z)={h_yz}, H(X,Y,Z)={h_xyz}, H(Z)={h_z}')
+            predicted_yxz[t, :] = sum_yxz
+            predicted_yz[t, :] = sum_yz
 
-        di = h_xz + h_yz - h_xyz - h_z
+        residuals_y_given_xz = self.timeseries[self.order:, y] - predicted_yxz[:, 0]
+        residuals_y_given_z = self.timeseries[self.order:, y] - predicted_yz[:, 0]
+
+        std_residuals_given_xz = np.std(residuals_y_given_xz)
+        std_residuals_given_z = np.std(residuals_y_given_z)
+
+        di = np.log(std_residuals_given_z / std_residuals_given_xz)
+
         return di
+
 
 
     def get_VAR1(self):
