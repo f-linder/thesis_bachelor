@@ -36,9 +36,7 @@ class VAR:
         - None
         """
 
-        # maximum |eigenvalue| < 0.9 to guarantee stationarity
-        max = 1
-        while max > 0.9:
+        while not self.is_stable():
             self.coefficients = np.zeros((self.order, self.m, self.m))
             # assign coefficients randomly across all orders and variables
             for var in range(self.m):
@@ -49,12 +47,22 @@ class VAR:
                 for (random_order, random_var) in all_pairs[:n_predictors]:
                     self.coefficients[random_order][var][random_var] = np.random.randn()
 
-            # compute eigenvalues
-            F = self.get_VAR1()
-            eigenvalues = np.linalg.eigvals(F)
-            max = np.max(np.abs(eigenvalues))
-
         self.generated = True
+
+
+    def is_stable(self):
+        """
+        Checks whether the magnitude of the largest eigenvalue is less than 0.9,
+        guaranteeing a stationary distribution.
+
+        Returns:
+        - boolean: True if model is stable, False otherwise.
+        """
+        companion_matrix = self.get_VAR1()
+        eigenvalues = np.linalg.eigvals(companion_matrix)
+        max = np.max(np.abs(eigenvalues))
+
+        return True if max < 0.9 else False
 
 
     def simulate(self, n_steps, file_name=None):
@@ -148,8 +156,6 @@ class VAR:
         di = np.log(std_residuals_given_z / std_residuals_given_xz)
 
         return di
-
-
 
     def get_VAR1(self):
         """
