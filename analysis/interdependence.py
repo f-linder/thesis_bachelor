@@ -4,6 +4,16 @@ import numpy as np
 from enum import Enum
 
 
+class SubsetSelection:
+    def __init__(self, n, policy):
+        self.n = n
+        self.policy = policy
+
+
+class Policies(Enum):
+    CORRELATION = 1
+
+
 def directed_information(x, y, z=None, order=1, subset_selection=None, estimator=prob.KNN()):
     """
     Estimate I(X -> Y || Z), the Directed Information between two time series X and Y 
@@ -30,7 +40,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
 
     # (X_t-l^t-1)
     x_lagged = get_lagged_returns(x, [(1, order)])
-    x_lagged = get_lagged_returns(y, [(1, order)])
+    y_lagged = get_lagged_returns(y, [(1, order)])
     z_lagged = get_lagged_returns(z, [(1, order) for _ in range(len(z[0]))])
 
     # samples corresponding to entropy terms
@@ -107,16 +117,6 @@ def rolling_window(window_size, step_size, X, Y, Z=None, order=1, estimator=prob
     return di
 
 
-class SubsetSelection:
-    def __init__(self, n, policy):
-        self.n = n
-        self.policy = policy
-
-
-class Policies(Enum):
-    CORRELATION = 1
-
-
 def select_subset(y, z, subset_selection):
     """
     Returns a subset of Z according to the given subset_selection.
@@ -132,12 +132,12 @@ def select_subset(y, z, subset_selection):
         cor = np.corrcoef(y.tranpose()[0], z.transpose())[0, 1:]
         cor_index = [c for c in enumerate(cor)]
         sorted_cor_index = sorted(cor_index, key=lambda x: x[1])
-        max_indices = [i for (i, _) in sorted_cor_index[-subset_selection.n:]]
 
+        max_indices = [i for (i, _) in sorted_cor_index[-subset_selection.n:]]
         subset_z = z[max_indices].transpose()
         return subset_z
-    else:
-        return 0
+
+    return z
 
 
 def get_lagged_returns(returns, lags):
