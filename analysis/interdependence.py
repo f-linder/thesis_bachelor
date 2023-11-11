@@ -1,9 +1,10 @@
 import analysis.probabilities as prob
 import pandas as pd
 import numpy as np
+from enum import Enum
 
 
-def directed_information(X, Y, Z=None, order=1, estimator=prob.KNN()):
+def directed_information(x, y, z=None, order=1, subset_selection=None, estimator=prob.KNN()):
     """
     Estimate I(X -> Y || Z), the Directed Information between two time series X and Y 
     causally conditioned on a set of time series Z with memory of size l / order.
@@ -13,9 +14,9 @@ def directed_information(X, Y, Z=None, order=1, estimator=prob.KNN()):
                      - H(Y_t, Y_t-l^t-1, X_t-l^t-1 Z_t-l^t-1) - H(Y_t-l^t-1, Z_t-l^t-1)
 
     Parameters:
-    - X (numpy.ndarray): The first time series (X).
-    - Y (numpy.ndarray): The second time series (Y).
-    - Z (numpy.ndarray or None): The set of time series causally conditioned on (Z).
+    - x (numpy.ndarray): The first time series (X).
+    - y (numpy.ndarray): The second time series (Y).
+    - z (numpy.ndarray or None): The set of time series causally conditioned on (Z).
     - order (int): The memory (or lag) for DI estimation (default is 1).
     - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
 
@@ -23,18 +24,20 @@ def directed_information(X, Y, Z=None, order=1, estimator=prob.KNN()):
     - di (float): The estimated Directed Information between X and
     """
 
-    Z = Z if Z is not None else [[] for _ in range(len(X) - order)]
+    z = z if z is not None else [[] for _ in range(len(x) - order)]
+    if subset_selection is not None:
+        z = select_subset(y, z, subset_selection)
 
     # (X_t-l^t-1)
-    X_lagged = get_lagged_returns(X, [(1, order)])
-    Y_lagged = get_lagged_returns(Y, [(1, order)])
-    Z_lagged = get_lagged_returns(Z, [(1, order) for _ in range(len(Z[0]))])
+    x_lagged = get_lagged_returns(x, [(1, order)])
+    x_lagged = get_lagged_returns(y, [(1, order)])
+    z_lagged = get_lagged_returns(z, [(1, order) for _ in range(len(z[0]))])
 
     # samples corresponding to entropy terms
-    ytyz = np.hstack((Y[order:], Y_lagged, Z_lagged))
-    xyz = np.hstack((X_lagged, Y_lagged, Z_lagged))
-    ytyxz = np.hstack((Y[order:], Y_lagged, X_lagged, Z_lagged))
-    yz = np.hstack((Y_lagged, Z_lagged))
+    ytyz = np.hstack((y[order:], y_lagged, z_lagged))
+    xyz = np.hstack((x_lagged, y_lagged, z_lagged))
+    ytyxz = np.hstack((y[order:], y_lagged, x_lagged, z_lagged))
+    yz = np.hstack((z_lagged, z_lagged))
 
     # density functions corresponding to entropy terms
     pdf_ytyz = prob.pdf(estimator, ytyz)
@@ -42,7 +45,7 @@ def directed_information(X, Y, Z=None, order=1, estimator=prob.KNN()):
     pdf_ytyxz = prob.pdf(estimator, ytyxz)
     pdf_yz = prob.pdf(estimator, yz)
 
-    T = len(X) - order
+    T = len(x) - order
     di = 0.0
 
     for t in range(T):
@@ -104,10 +107,44 @@ def rolling_window(window_size, step_size, X, Y, Z=None, order=1, estimator=prob
     return di
 
 
+class SubsetSelection:
+    def __init__(self, n, policy):
+        self.n = n
+        self.policy = policy
+
+
+class Policies(Enum):
+    CORRELATION = 1
+
+
+def select_subset(y, z, subset_selection):
+    """
+    Returns a subset of Z according to the given subset_selection.
+
+    Parameters:
+    - y (numpy.ndarray): List of return samples (of one variable)
+    - z (numpy.ndarray): List of return samples (of multiple variables)
+
+    Returns:
+    - subset_z (numpy.ndarray): List of return samples of a subset of the variables given in z
+    """
+    if subset_selection.policy == Policies.CORRELATION:
+        cor = np.corrcoef(y.tranpose()[0], z.transpose())[0, 1:]
+        cor_index = [c for c in enumerate(cor)]
+        sorted_cor_index = sorted(cor_index, key=lambda x: x[1])
+        max_indices = [i for (i, _) in sorted_cor_index[-subset_selection.n:]]
+
+        subset_z = z[max_indices].transpose()
+        return subset_z
+    else:
+        return 0
+
+
 def get_lagged_returns(returns, lags):
     """
-    Transform a list of return samples with corresponding lag pairs into 
+    Transform a list of return samples with corresponding lag pairs into
     lagged time series data.
+
     Example:
     Turns (X_t, Y_t, Z_t, ...) with [(f0, l0), (f1, l1), (f2, l2), ...]
     into (X_t-l0^t-f0, Y_t-l1^t-f2, Z_t-l2^t-f2, ...) or in python notation
