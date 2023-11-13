@@ -95,27 +95,27 @@ def clean_up():
     print('Clean up complete: removed all .csv files')
 
 
-def plot_directed_graph(di_matrix, labels, threshold=0.05):
+def plot_directed_graph(adjacency_matrix, labels, threshold=0.05):
     """
     Create and display a directed graph to visualize causal relationships based on DI values.
 
     Parameters:
-    - di_matrix (numpy.ndarray): A matrix containing DI values between variables.
+    - adjacency_matrix (numpy.ndarray): Adjacency matrix containing weights of edges between all variables.
     - labels (list): A list of labels for each variable.
-    - threshold (float): The threshold for DI values to appear in graph (default is 0.05).
+    - threshold (float): The threshold for weights of edges values to appear in graph (default is 0.05).
 
     Returns:
     - None
     """
-    n_vars = len(di_matrix)
+    n_vars = len(adjacency_matrix)
     dig = nx.DiGraph()
 
     for i in range(n_vars):
-        for j, di in enumerate(di_matrix[i]):
+        for j, di in enumerate(adjacency_matrix[i]):
             if di >= threshold:
                 dig.add_edge(labels[i], labels[j], weight=di)
 
-    pos = nx.kamada_kawai_layout(dig)
+    pos = nx.planar_layout(dig)
     edge_labels = nx.get_edge_attributes(dig, 'weight')
     edge_labels = {e: f'{w:.3f}' for e, w in edge_labels.items()}  # limit decimals
 
