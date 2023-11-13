@@ -114,7 +114,7 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
 
     # plot if labels given
     if labels is not None:
-        utils.plot_dig(di_matrix, labels, threshold)
+        utils.plot_directed_graph(di_matrix, labels, threshold)
 
     return np.array(di_matrix)
 
