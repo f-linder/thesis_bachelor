@@ -1,4 +1,5 @@
 import analysis.probabilities as prob
+import analysis.utils as utils
 import pandas as pd
 import numpy as np
 from enum import Enum
@@ -19,8 +20,8 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     Estimate I(X -> Y || Z), the Directed Information between two time series X and Y 
     causally conditioned on a set of time series Z with memory of size l / order.
 
-    I(X -> Y || Z) = Sum_t=1^T I(Y_t, X_t-l^t-1 | Y_t-l^t-1, Z_t-l^t-1)
-                   = Sum_t=1^T H(Y_t, Y_t-l^t-1, Z_t-l^t-1) + H(X_t-l^t-1, Y_t-l^t-1, Z_t-l^t-1)
+    I(X -> Y || Z) = 1/T * Sum_t=1^T I(Y_t, X_t-l^t-1 | Y_t-l^t-1, Z_t-l^t-1)
+                   = 1/T * Sum_t=1^T H(Y_t, Y_t-l^t-1, Z_t-l^t-1) + H(X_t-l^t-1, Y_t-l^t-1, Z_t-l^t-1)
                      - H(Y_t, Y_t-l^t-1, X_t-l^t-1 Z_t-l^t-1) - H(Y_t-l^t-1, Z_t-l^t-1)
 
     Parameters:
@@ -33,7 +34,6 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     Returns:
     - di (float): The estimated Directed Information between X and
     """
-
     z = z if z is not None else [[] for _ in range(len(x) - order)]
     if subset_selection is not None:
         z = select_subset(y, z, subset_selection)
@@ -47,7 +47,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     ytyz = np.hstack((y[order:], y_lagged, z_lagged))
     xyz = np.hstack((x_lagged, y_lagged, z_lagged))
     ytyxz = np.hstack((y[order:], y_lagged, x_lagged, z_lagged))
-    yz = np.hstack((z_lagged, z_lagged))
+    yz = np.hstack((y_lagged, z_lagged))
 
     # density functions corresponding to entropy terms
     pdf_ytyz = prob.pdf(estimator, ytyz)
@@ -70,10 +70,56 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
 
         di += mi
 
-    return di
+    return di / T
 
 
-def rolling_window(window_size, step_size, X, Y, Z=None, order=1, estimator=prob.KNN()):
+def directed_information_graph(returns, labels=None, threshold=0.05, order=1, subset_selection=None, estimator=prob.KNN()):
+    """"
+    Compute directed information (DI) between all variables and plot results
+    in a Direct Information Graph (DIG).
+
+    Parameters:
+    - returns (numpy.ndarray): A list of return samples of form [[x1, y1, ...], [x2, y2, ...], ...].
+    - labels (list or None): A list of labels for each variable (optional).
+    - threshold (float): The threshold for DI in graph (default is 0.05).
+    - order (int): The memory order (lag) for DI estimation (default is 1).
+    - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
+    - estimator (object): An estimator for probability density functions (KDE or KNN).
+
+    Returns:
+    - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
+    """
+    n_vars = len(returns[0])
+    di_matrix = []
+
+    # compute directed information for every pair
+    for i in range(n_vars):
+        x_influences = []
+        x = returns[:, [i]]
+
+        for j in range(n_vars):
+            if i == j:
+                x_influences.append(0)
+                continue
+
+            y = returns[:, [j]]
+            # exclude i, j from set causally conditioned on
+            cols = [r for r in range(n_vars) if r != i and r != j]
+            z = returns[:, cols] if n_vars > 2 else None
+
+            di = directed_information(x, y, z, order, subset_selection, estimator)
+            x_influences.append(di)
+
+        di_matrix.append(x_influences)
+
+    # plot if labels given
+    if labels is not None:
+        utils.plot_dig(di_matrix, labels, threshold)
+
+    return np.array(di_matrix)
+
+
+def rolling_window(window_size, step_size, x, y, z=None, order=1, estimator=prob.KNN()):
     """
     Estimate time-varying Directed Information using a rolling window approach.
 
@@ -89,17 +135,16 @@ def rolling_window(window_size, step_size, X, Y, Z=None, order=1, estimator=prob
     Returns:
     - di (list): A list of time-varying Directed Information values estimated for each window.
     """
-
     di = []
-    num_steps = (len(X) - window_size) // step_size
+    num_steps = (len(x) - window_size) // step_size
 
     for i in range(num_steps):
         start = i * step_size
         end = start + window_size
 
-        window_X = X[start:end]
-        window_Y = Y[start:end]
-        window_Z = Z[start:end] if Z is not None else None
+        window_X = x[start:end]
+        window_Y = y[start:end]
+        window_Z = z[start:end] if z is not None else None
 
         di_window = directed_information(window_X, window_Y, window_Z, order, estimator)
         di.append(di_window)
@@ -107,9 +152,9 @@ def rolling_window(window_size, step_size, X, Y, Z=None, order=1, estimator=prob
     # including samples otherwise cut off
     start = num_steps * step_size
 
-    window_X = X[start:]
-    window_Y = Y[start:]
-    window_Z = Z[start:] if Z is not None else None
+    window_X = x[start:]
+    window_Y = y[start:]
+    window_Z = z[start:] if z is not None else None
 
     di_window = directed_information(window_X, window_Y, window_Z, order, estimator)
     di.append(di_window)
@@ -158,7 +203,6 @@ def get_lagged_returns(returns, lags):
     Returns:
     - lagged_returns (numpy.ndarray): Lagged time series data.
     """
-
     n_features = len(returns[0])
     max_lag = max([t[1] for t in lags]) if lags != [] else 0
 

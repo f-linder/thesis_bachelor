@@ -1,6 +1,9 @@
 import os
 import yfinance as yf
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import networkx as nx
 from enum import Enum
 
 
@@ -90,3 +93,57 @@ def clean_up():
         os.remove(os.path.join(dir_path, filename))
 
     print('Clean up complete: removed all .csv files')
+
+
+def plot_directed_graph(di_matrix, labels, threshold=0.05):
+    """
+    Create and display a directed graph to visualize causal relationships based on DI values.
+
+    Parameters:
+    - di_matrix (numpy.ndarray): A matrix containing DI values between variables.
+    - labels (list): A list of labels for each variable.
+    - threshold (float): The threshold for DI values to appear in graph (default is 0.05).
+
+    Returns:
+    - None
+    """
+    n_vars = len(di_matrix)
+    dig = nx.DiGraph()
+
+    for i in range(n_vars):
+        for j, di in enumerate(di_matrix[i]):
+            if di >= threshold:
+                dig.add_edge(labels[i], labels[j], weight=di)
+
+    pos = nx.kamada_kawai_layout(dig)
+    edge_labels = nx.get_edge_attributes(dig, 'weight')
+    edge_labels = {e: f'{w:.3f}' for e, w in edge_labels.items()}  # limit decimals
+
+    nx.draw(dig, pos, arrows=True, with_labels=True, node_color="lightblue")
+    nx.draw_networkx_edge_labels(dig, pos, edge_labels=edge_labels)
+
+
+def plot_3D(xs, ys, fun, titel):
+    """
+    Create and display a 3D surface plot of a function.
+
+    Parameters:
+    - xs (numpy.ndarray): 1D array of x-values.
+    - ys (numpy.ndarray): 1D array of y-values.
+    - fun (function): The function to be plotted. It takes a list [x, y] as input and returns a scalar value.
+    - title (str): The title for the plot.
+
+    Returns:
+    - None
+    """
+
+    x, y = np.meshgrid(xs, ys)
+    z = np.array([[fun([x, y]) for x in xs] for y in ys])
+
+    fig = plt.figure()
+
+    ax1 = fig.add_subplot(121, projection='3d')
+    ax1.plot_surface(x, y, z, cmap='viridis')
+    ax1.set_title(titel)
+
+    plt.show()
