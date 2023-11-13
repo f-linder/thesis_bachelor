@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import analysis.utils as utils
 
 
 class VAR:
@@ -158,6 +159,44 @@ class VAR:
         di = np.log(std_residuals_given_z / std_residuals_given_xz)
 
         return di
+
+
+    # TODO: subset selection?
+    def directed_information_graph(self, plot=True, threshold=0.05, subset_selection=None):
+        """"
+        Compute directed information (DI) between all variables and plot results
+        in a Direct Information Graph (DIG).
+
+        Parameters:
+        - threshold (float): The threshold for DI in graph (default is 0.05).
+        - plot (boolean): Whether the graph should be plotted or not.
+        - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
+
+        Returns:
+        - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
+        """
+        di_matrix = []
+
+        for i in range(self.m):
+            influences = []
+
+            for j in range(self.m):
+                if i == j:
+                    influences.append(0)
+                    continue
+
+                z = [r for r in range(self.m) if r != i and r != j]
+                di = self.directed_information(i, j, z)
+                influences.append(di)
+
+            di_matrix.append(influences)
+
+        if plot:
+            labels = [f'X{i}' for i in range(self.m)]
+            utils.plot_directed_graph(di_matrix, labels, threshold)
+
+        return np.array(di_matrix)
+
 
     def get_VAR1(self):
         """
