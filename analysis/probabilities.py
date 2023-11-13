@@ -24,7 +24,7 @@ def pdf(estimator, returns):
 
     Parameters:
     - estimator (KDE or KNN): The estimator used.
-    - returns (list of lists): List of return samples of the form [[x1, y1, ...], [x2, y2, ...], ...]
+    - returns (np.ndarray): List of return samples of the form [[x1, y1, ...], [x2, y2, ...], ...]
 
     Returns:
     - density_function (function): A function taking a list of values [x, y, ...] and calculating Pr(X=x, Y=y, ...)

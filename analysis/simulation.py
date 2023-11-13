@@ -1,4 +1,3 @@
-from scipy.linalg import solve_discrete_lyapunov
 import numpy as np
 import pandas as pd
 
@@ -36,7 +35,7 @@ class VAR:
         - None
         """
 
-        while not self.is_stable():
+        while True:
             self.coefficients = np.zeros((self.order, self.m, self.m))
             # assign coefficients randomly across all orders and variables
             for var in range(self.m):
@@ -46,6 +45,9 @@ class VAR:
 
                 for (random_order, random_var) in all_pairs[:n_predictors]:
                     self.coefficients[random_order][var][random_var] = np.random.randn()
+
+            if self.is_stable():
+                break
 
         self.generated = True
 
