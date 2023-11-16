@@ -41,6 +41,8 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     # (X_t-l^t-1)
     x_lagged = get_lagged_returns(x, [(1, order)])
     y_lagged = get_lagged_returns(y, [(1, order)])
+    if (x == y).all():
+        y_lagged = np.array([[] for _ in range(len(y) - order)])
     z_lagged = get_lagged_returns(z, [(1, order) for _ in range(len(z[0]))])
 
     # samples corresponding to entropy terms
@@ -53,7 +55,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     pdf_ytyz = prob.pdf(estimator, ytyz)
     pdf_xyz = prob.pdf(estimator, xyz)
     pdf_ytyxz = prob.pdf(estimator, ytyxz)
-    pdf_yz = prob.pdf(estimator, yz)
+    pdf_yz = prob.pdf(estimator, yz) if not (x == y).all() else lambda x: 1
 
     T = len(x) - order
     di = 0.0
@@ -98,10 +100,6 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
         x = returns[:, [i]]
 
         for j in range(n_vars):
-            if i == j:
-                x_influences.append(0)
-                continue
-
             y = returns[:, [j]]
             # exclude i, j from set causally conditioned on
             cols = [r for r in range(n_vars) if r != i and r != j]
