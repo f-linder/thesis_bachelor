@@ -34,16 +34,16 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     Returns:
     - di (float): The estimated Directed Information between X and
     """
-    z = z if z is not None else [[] for _ in range(len(x) - order)]
-    if subset_selection is not None:
-        z = select_subset(y, z, subset_selection)
+    z = select_subset(y, z, subset_selection)  # returns z if none is specified
+    z_present = z is not None and len(z[0]) != 0
 
     # (X_t-l^t-1)
     x_lagged = get_lagged_returns(x, [(1, order)])
     y_lagged = get_lagged_returns(y, [(1, order)])
+    z_lagged = get_lagged_returns(z, [(1, order) for _ in range(len(z[0]))]) if z_present else np.array([[] for _ in range(len(y_lagged))])
+
     if (x == y).all():
         y_lagged = np.array([[] for _ in range(len(y) - order)])
-    z_lagged = get_lagged_returns(z, [(1, order) for _ in range(len(z[0]))])
 
     # samples corresponding to entropy terms
     ytyz = np.hstack((y[order:], y_lagged, z_lagged))
@@ -55,7 +55,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     pdf_ytyz = prob.pdf(estimator, ytyz)
     pdf_xyz = prob.pdf(estimator, xyz)
     pdf_ytyxz = prob.pdf(estimator, ytyxz)
-    pdf_yz = prob.pdf(estimator, yz) if not (x == y).all() else lambda x: 1
+    pdf_yz = prob.pdf(estimator, yz) if z_present or not (x == y).all() else lambda x: 1
 
     T = len(x) - order
     di = 0.0
@@ -92,29 +92,26 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
     - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
     """
     n_vars = len(returns[0])
-    di_matrix = []
+    di_matrix = np.zeros((n_vars, n_vars))
 
     # compute directed information for every pair
     for i in range(n_vars):
-        x_influences = []
         x = returns[:, [i]]
 
         for j in range(n_vars):
             y = returns[:, [j]]
-            # exclude i, j from set causally conditioned on
+            # exclude i, j from z causally conditioned on
             cols = [r for r in range(n_vars) if r != i and r != j]
-            z = returns[:, cols] if n_vars > 2 else None
+            z = returns[:, cols]
 
             di = directed_information(x, y, z, order, subset_selection, estimator)
-            x_influences.append(di)
-
-        di_matrix.append(x_influences)
+            di_matrix[i, j] = di
 
     # plot if labels given
     if labels is not None:
         utils.plot_directed_graph(di_matrix, labels, threshold)
 
-    return np.array(di_matrix)
+    return di_matrix
 
 
 def rolling_window(window_size, step_size, x, y, z=None, order=1, estimator=prob.KNN()):
@@ -171,7 +168,9 @@ def select_subset(y, z, subset_selection):
     Returns:
     - subset_z (numpy.ndarray): List of return samples of a subset of the variables given in z
     """
-    if subset_selection.policy == Policies.CORRELATION:
+    if subset_selection is None or z is None:
+        return z
+    elif subset_selection.policy == Policies.CORRELATION:
         cor = np.corrcoef(y.tranpose()[0], z.transpose())[0, 1:]
         cor_index = [c for c in enumerate(cor)]
         sorted_cor_index = sorted(cor_index, key=lambda x: x[1])
@@ -180,7 +179,6 @@ def select_subset(y, z, subset_selection):
         subset_z = z[max_indices].transpose()
         return subset_z
 
-    return z
 
 
 def get_lagged_returns(returns, lags):
