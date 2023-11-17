@@ -13,8 +13,9 @@ class KDE:
 
 # K-Nearest Neighbor Estimator
 class KNN:
-    def __init__(self, k=None):
+    def __init__(self, k=None, metric='euclidean'):
         self.k = k
+        self.metric = metric
 
 
 def pdf(estimator, returns):
@@ -44,7 +45,7 @@ def pdf(estimator, returns):
         n = len(returns)
         d = len(returns[0])
         k = estimator.k if estimator.k else math.ceil(np.sqrt(n) / 2)
-        knn = NearestNeighbors(n_neighbors=k).fit(returns)
+        knn = NearestNeighbors(n_neighbors=k, metric=estimator.metric).fit(returns)
 
         def density_function(values):
             distances, _ = knn.kneighbors([values])

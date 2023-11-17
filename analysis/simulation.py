@@ -22,7 +22,7 @@ class VAR:
         self.coefficients = []
         self.generated = False
         self.timeseries = []
-        self.di_matrix = []
+        self.di_matrix = np.zeros((m, m))
 
 
     def generate(self, max_predictors):
@@ -182,19 +182,11 @@ class VAR:
         Returns:
         - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
         """
-        di_matrix = []
 
         for i in range(self.m):
-            influences = []
-
             for j in range(self.m):
                 z = [r for r in range(self.m) if r != i and r != j]
-                di = self.directed_information(i, j, z)
-                influences.append(di)
-
-            di_matrix.append(influences)
-
-        self.di_matrix = np.array(di_matrix)
+                self.di_matrix[i, j] = self.directed_information(i, j, z)
 
         if plot:
             labels = [f'X{i}' for i in range(self.m)]
@@ -253,7 +245,7 @@ class NVAR:
         self.functions_str = []
         self.generated = False
         self.timeseries = []
-        self.di_matrix = []
+        self.di_matrix = np.zeros((m, m))
 
 
     def generate(self, max_predictors):
@@ -387,19 +379,10 @@ class NVAR:
 
     # TODO: subset selection?
     def directed_information_graph(self, plot=True, threshold=0.05, subset_selection=None):
-        di_matrix = []
-
         for i in range(self.m):
-            influences = []
-
             for j in range(self.m):
                 z = [r for r in range(self.m) if r != i and r != j]
-                di = self.directed_information(i, j, z)
-                influences.append(di)
-
-            di_matrix.append(influences)
-
-        self.di_matrix = np.array(di_matrix)
+                self.di_matrix[i, j] = self.directed_information(i, j, z)
 
         if plot:
             labels = [f'X{i}' for i in range(self.m)]
