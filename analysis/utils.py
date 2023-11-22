@@ -3,7 +3,7 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import networkx as nx
+from graphviz import Digraph
 from enum import Enum
 
 
@@ -95,32 +95,51 @@ def clean_up():
     print('Clean up complete: removed all .csv files')
 
 
-def plot_directed_graph(adjacency_matrix, labels, threshold=0.05):
-    """
-    Create and display a directed graph to visualize causal relationships based on DI values.
+def plot_directed_graph(draw, data, labels, threshold=0.05):
+    assert draw in ['dig', 'var', 'nvar']
 
-    Parameters:
-    - adjacency_matrix (numpy.ndarray): Adjacency matrix containing weights of edges between all variables.
-    - labels (list): A list of labels for each variable.
-    - threshold (float): The threshold for weights of edges values to appear in graph (default is 0.05).
+    n_vars = len(data[0])
+    graph = Digraph(format='svg', graph_attr={'rankdir': 'LR'})
 
-    Returns:
-    - None
-    """
-    n_vars = len(adjacency_matrix)
-    dig = nx.DiGraph()
+    if draw == 'dig':
+        for label in labels:
+            graph.node(label, label=label)
+        for i in range(n_vars):
+            for j in range(n_vars):
+                influence = data[0, i, j]
+                if influence >= threshold:
+                    graph.edge(labels[i], labels[j], label=f'{influence:.3f}')
+                    
+    else:
+        order = len(data)
+        # add nodes of orders
+        for o in range(order, 0, -1):
+            with graph.subgraph(name=f't-{o}') as sub:
+                for i in range(n_vars):
+                    name = f'{labels[i]}_t-{o}'
+                    sub.node(name, label=name)
+                sub.attr(rank='same')
+        # add nodes for time t
+        with graph.subgraph(name='t') as sub:
+            for i in range(n_vars):
+                name = f'{labels[i]}_t'
+                sub.node(name, label=name)
+            sub.attr(rank='same')
 
-    for i in range(n_vars):
-        for j, di in enumerate(adjacency_matrix[i]):
-            if di >= threshold:
-                dig.add_edge(labels[i], labels[j], weight=di)
+        # add edges
+        for i in range(n_vars):
+            name_to = f'{labels[i]}_t'
+            for j in range(n_vars):
+                for o in range(order):
+                    name_from = f'{labels[j]}_t-{o + 1}'
+                    influence = data[o, i, j]
 
-    pos = nx.planar_layout(dig)
-    edge_labels = nx.get_edge_attributes(dig, 'weight')
-    edge_labels = {e: f'{w:.3f}' for e, w in edge_labels.items()}  # limit decimals
+                    if draw == 'nvar' and influence != 's':
+                        graph.edge(name_from, name_to, label=f'{influence}')
+                    elif draw == 'var' and influence > 0:
+                        graph.edge(name_from, name_to, label=f'{influence:.3f}')
 
-    nx.draw(dig, pos, arrows=True, with_labels=True, node_color="lightblue")
-    nx.draw_networkx_edge_labels(dig, pos, edge_labels=edge_labels)
+    return graph
 
 
 def plot_3D(xs, ys, fun, titel):

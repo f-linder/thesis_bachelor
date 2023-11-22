@@ -276,6 +276,13 @@ class NVAR:
 
 
     def random_function(self):
+        """
+        Generate a random function for the NVAR model.
+
+        Returns:
+        - Tuple: A tuple containing a string representation of the function and the
+          corresponding function itself.
+        """
         n_functions = 6
         n = np.random.randint(1, n_functions + 1)
         # linear / coefficient
@@ -310,6 +317,16 @@ class NVAR:
 
 
     def simulate(self, n_steps, file_name=None):
+        """
+        Simulate time series from the NVAR model. Noise ~N(0, 1/4)
+
+        Parameters:
+        - n_steps (int): The number of time steps to simulate.
+        - file_name (str): The name of the file to save the simulated data (optional).
+
+        Returns:
+        - timeseries (numpy.ndarray): Simulated time series data with shape (m, n_steps).
+        """
         if not self.generated:
             self.generate(self.m * self.order / 2)
 
@@ -342,6 +359,26 @@ class NVAR:
 
 
     def directed_information(self, x, y, z=[]):
+        """
+        Calculate I(X -> Y || Z), the Directed Information (DI) from variable X to Y
+        causally conditioned on a set of variables Z.
+
+        Comparing two models, one given X and Z another one only given Z:
+        Y_t = f(Y_t-1) + g(Z_t-1) * h(X_t-1) + ... + N_t
+        Y_t = f(Y_t-1) + g(Z_t-1) + ... + N_t'
+
+        I(X -> Y || Z) = H(Y || Z) - H(Y || X, Z)
+                       = log (std(N_t') / std(N_t))
+        where H(Y || X, Z) = 0.5 * log (2 * pi * e * std(N_t)^2)
+
+        Parameters:
+        - x (int): Index of the source variable X.
+        - y (int): Index of the target variable Y.
+        - z (list): List of indices of variables in the set Z.
+
+        Returns:
+        - di (float): The calculated Directed Information.
+        """
         steps = len(self.timeseries) - self.order
         # calculated with values of real simulation
         y_given_xz = np.zeros(steps)
@@ -379,6 +416,19 @@ class NVAR:
 
     # TODO: subset selection?
     def directed_information_graph(self, plot=True, threshold=0.05, subset_selection=None):
+        """"
+        Compute directed information (DI) between all variables and plot results
+        in a Direct Information Graph (DIG).
+
+        Parameters:
+        - threshold (float): The threshold for DI in graph (default is 0.05).
+        - plot (boolean): Whether the graph should be plotted or not.
+        - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
+
+        Returns:
+        - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
+        """
+
         for i in range(self.m):
             for j in range(self.m):
                 z = [r for r in range(self.m) if r != i and r != j]
