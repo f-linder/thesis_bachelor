@@ -96,10 +96,22 @@ def clean_up():
 
 
 def plot_directed_graph(draw, data, labels, threshold=0.05):
+    """
+    Generate and visualize a directed graph based on the given data and labels.
+
+    Parameters:
+    - draw (str): Specifies the type of graph to draw. Can be one of ['dig', 'var', 'nvar'].
+    - data (numpy.ndarray): The directed information or influence data.
+    - labels (list): List of labels for nodes in the graph.
+    - threshold (float): The threshold for edge inclusion in the graph (default is 0.05).
+
+    Returns:
+    - graphviz.Digraph: The generated directed graph.
+    """
     assert draw in ['dig', 'var', 'nvar']
 
     n_vars = len(data[0])
-    graph = Digraph(format='svg', graph_attr={'rankdir': 'LR'})
+    graph = Digraph(format='svg', graph_attr={'color': 'lightblue2', 'rankdir': 'LR'})
 
     if draw == 'dig':
         for label in labels:
@@ -109,7 +121,6 @@ def plot_directed_graph(draw, data, labels, threshold=0.05):
                 influence = data[0, i, j]
                 if influence >= threshold:
                     graph.edge(labels[i], labels[j], label=f'{influence:.3f}')
-                    
     else:
         order = len(data)
         # add nodes of orders

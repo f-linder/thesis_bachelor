@@ -71,8 +71,7 @@ class VAR:
 
     def simulate(self, n_steps, file_name=None):
         """
-        Simulate time series from the VAR model.
-        Noise ~N(0, 1/4)
+        Simulate time series from the VAR model. Noise ~N(0, 1/4)
 
         Parameters:
         - n_steps (int): The number of time steps to simulate.
@@ -169,7 +168,7 @@ class VAR:
 
 
     # TODO: subset selection?
-    def directed_information_graph(self, plot=True, threshold=0.05, subset_selection=None):
+    def directed_information_graph(self, plot=False, threshold=0.05, subset_selection=None):
         """"
         Compute directed information (DI) between all variables and plot results
         in a Direct Information Graph (DIG).
@@ -180,7 +179,8 @@ class VAR:
         - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
 
         Returns:
-        - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
+        - di_matrix (numpy.ndarray) or graphviz.Digraph: A matrix containing DI values between all variables
+        or the graphical representation of the DIG, depending on the parameter plot.
         """
 
         for i in range(self.m):
@@ -190,9 +190,9 @@ class VAR:
 
         if plot:
             labels = [f'X{i}' for i in range(self.m)]
-            utils.plot_directed_graph(self.di_matrix, labels, threshold)
+            graph = utils.plot_directed_graph('dig', np.array([self.di_matrix]), labels, threshold)
 
-        return self.di_matrix
+        return graph if plot else self.di_matrix
 
 
     def get_VAR1(self):
@@ -415,7 +415,7 @@ class NVAR:
 
 
     # TODO: subset selection?
-    def directed_information_graph(self, plot=True, threshold=0.05, subset_selection=None):
+    def directed_information_graph(self, plot=False, threshold=0.05, subset_selection=None):
         """"
         Compute directed information (DI) between all variables and plot results
         in a Direct Information Graph (DIG).
@@ -426,7 +426,8 @@ class NVAR:
         - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
 
         Returns:
-        - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
+        - di_matrix (numpy.ndarray) or graphviz.Digraph: A matrix containing DI values between all variables
+        or the graphical representation of the DIG, depending on the parameter plot.
         """
 
         for i in range(self.m):
@@ -436,6 +437,6 @@ class NVAR:
 
         if plot:
             labels = [f'X{i}' for i in range(self.m)]
-            utils.plot_directed_graph(self.di_matrix, labels, threshold)
+            graph = utils.plot_directed_graph('dig', np.array([self.di_matrix]), labels, threshold)
 
-        return self.di_matrix
+        return graph if plot else self.di_matrix

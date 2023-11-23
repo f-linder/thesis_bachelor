@@ -128,7 +128,7 @@ def rolling_window(window_size, step_size, x, y, z=None, order=1, estimator=prob
     - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
 
     Returns:
-    - di (list): A list of time-varying Directed Information values estimated for each window.
+    - di (numpy.ndarray): A list of time-varying Directed Information values estimated for each window.
     """
     di = []
     num_steps = (len(x) - window_size) // step_size
@@ -154,7 +154,7 @@ def rolling_window(window_size, step_size, x, y, z=None, order=1, estimator=prob
     di_window = directed_information(window_X, window_Y, window_Z, order, estimator)
     di.append(di_window)
 
-    return di
+    return np.array(di)
 
 
 def select_subset(y, z, subset_selection):
