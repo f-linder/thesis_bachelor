@@ -1,5 +1,4 @@
 from sklearn.neighbors import KernelDensity, NearestNeighbors
-from scipy.special import gamma
 import math
 import numpy as np
 
@@ -51,7 +50,7 @@ def pdf(estimator, returns):
             distances, _ = knn.kneighbors([values])
             radius = np.max(distances)
             # volume of d-dimensional hypersphere
-            volume = (np.pi ** (d / 2) / gamma(d / 2 + 1)) * (radius ** d)
+            volume = (np.pi ** (d / 2) / math.gamma(d / 2 + 1)) * (radius ** d)
             return (k - 1) / (n * volume)
 
         return density_function
