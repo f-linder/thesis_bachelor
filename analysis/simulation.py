@@ -48,6 +48,11 @@ class VAR:
                 for (random_order, random_var) in all_pairs[:n_predictors]:
                     self.coefficients[random_order][var][random_var] = np.random.randn()
 
+            # rescale VAR if possible
+            if self.order == 1:
+                self.rescale()
+                break
+
             if self.is_stable():
                 break
 
@@ -56,7 +61,7 @@ class VAR:
 
     def is_stable(self):
         """
-        Checks whether the magnitude of the largest eigenvalue is less than 0.9,
+        Checks whether the magnitude of the largest eigenvalue is less or equal to 0.9,
         guaranteeing a stationary distribution.
 
         Returns:
@@ -66,7 +71,24 @@ class VAR:
         eigenvalues = np.linalg.eigvals(companion_matrix)
         max = np.max(np.abs(eigenvalues))
 
-        return True if max < 0.9 else False
+        return True if max <= 0.9 else False
+
+
+    def rescale(self):
+        """
+        Rescales the coefficient matrix for the largest eigenvalue to be 0.9.
+        This is only possible if the largest eigenvalue is not zero.
+
+        Returns:
+        - None
+        """
+        companion_matrix = self.get_VAR1()
+        eigenvalues = np.linalg.eigvals(companion_matrix)
+        max = np.max(np.abs(eigenvalues))
+
+        # value = factor * max
+        factor = (0.9 / max) if max != 0 else 1
+        self.coefficients[0] *= factor
 
 
     def simulate(self, n_steps, file_name=None):
