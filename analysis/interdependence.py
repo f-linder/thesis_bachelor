@@ -29,6 +29,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     - y (numpy.ndarray): The second time series (Y).
     - z (numpy.ndarray or None): The set of time series causally conditioned on (Z).
     - order (int): The memory (or lag) for DI estimation (default is 1).
+    - subset_selection (SubsetSelection): Subset selection policy and used to determine set causally conditioned on.
     - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
 
     Returns:
@@ -75,6 +76,9 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     return di / T
 
 
+# TODO: DI and DIG with ticker names 
+
+# TODO: time-varying DIG
 def directed_information_graph(returns, labels=None, threshold=0.05, order=1, subset_selection=None, estimator=prob.KNN()):
     """"
     Compute directed information (DI) between all variables and plot results
@@ -90,6 +94,7 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
 
     Returns:
     - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
+    - plot (graphviz.Digraph): Visual representation of 
     """
     n_vars = len(returns[0])
     di_matrix = np.zeros((n_vars, n_vars))
@@ -109,22 +114,24 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
 
     # plot if labels given
     if labels is not None:
-        utils.plot_directed_graph(di_matrix, labels, threshold)
+        plot = utils.plot_directed_graph('dig', di_matrix, labels, threshold)
+        return di_matrix, plot
+    
+    return di_matrix, None
 
-    return di_matrix
 
-
-def rolling_window(window_size, step_size, x, y, z=None, order=1, estimator=prob.KNN()):
+def rolling_window(window_size, step_size, x, y, z=None, order=1, subset_selection=None, estimator=prob.KNN()):
     """
     Estimate time-varying Directed Information using a rolling window approach.
 
     Parameters:
     - window_size (int): The size of the rolling window.
     - step_size (int): The step size for moving the rolling window.
-    - X (numpy.ndarray): The first time series (X).
-    - Y (numpy.ndarray): The second time series (Y).
-    - Z (numpy.ndarray or None): The third time series (Z), or None if not conditioned on Z.
+    - x (numpy.ndarray): The first time series (X).
+    - y (numpy.ndarray): The second time series (Y).
+    - z (numpy.ndarray or None): The third time series (Z), or None if not conditioned on Z.
     - order (int): The memory order (lag) for DI estimation (default is 1).
+    - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
     - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
 
     Returns:
@@ -137,21 +144,21 @@ def rolling_window(window_size, step_size, x, y, z=None, order=1, estimator=prob
         start = i * step_size
         end = start + window_size
 
-        window_X = x[start:end]
-        window_Y = y[start:end]
-        window_Z = z[start:end] if z is not None else None
+        window_x = x[start:end]
+        window_y = y[start:end]
+        window_z = z[start:end] if z is not None else None
 
-        di_window = directed_information(window_X, window_Y, window_Z, order, estimator)
+        di_window = directed_information(window_x, window_y, window_z, order, subset_selection, estimator)
         di.append(di_window)
 
     # including samples otherwise cut off
     start = num_steps * step_size
 
-    window_X = x[start:]
-    window_Y = y[start:]
-    window_Z = z[start:] if z is not None else None
+    window_x = x[start:]
+    window_y = y[start:]
+    window_z = z[start:] if z is not None else None
 
-    di_window = directed_information(window_X, window_Y, window_Z, order, estimator)
+    di_window = directed_information(window_x, window_y, window_z, order, subset_selection, estimator)
     di.append(di_window)
 
     return np.array(di)
@@ -159,24 +166,26 @@ def rolling_window(window_size, step_size, x, y, z=None, order=1, estimator=prob
 
 def select_subset(y, z, subset_selection):
     """
-    Returns a subset of Z according to the given subset_selection.
+    Returns a subset of z according to the given subset_selection object.
 
     Parameters:
-    - y (numpy.ndarray): List of return samples (of one variable)
-    - z (numpy.ndarray): List of return samples (of multiple variables)
+    - y (numpy.ndarray): List of return samples (of one variable).
+    - z (numpy.ndarray): List of return samples (of multiple variables).
+    - subset_selection (object): Policy used to determine subset of z.
 
     Returns:
-    - subset_z (numpy.ndarray): List of return samples of a subset of the variables given in z
+    - subset_z (numpy.ndarray): List of return samples of a subset of the variables given in z.
     """
     if subset_selection is None or z is None:
         return z
     elif subset_selection.policy == Policies.CORRELATION:
-        cor = np.corrcoef(y.tranpose()[0], z.transpose())[0, 1:]
-        cor_index = [c for c in enumerate(cor)]
+        abs_cor = np.abs(np.corrcoef(y.transpose()[0], z.transpose())[0, 1:])
+        cor_index = [c for c in enumerate(abs_cor)]
         sorted_cor_index = sorted(cor_index, key=lambda x: x[1])
 
         max_indices = [i for (i, _) in sorted_cor_index[-subset_selection.n:]]
-        subset_z = z[max_indices].transpose()
+        subset_z = z[:, max_indices]  
+
         return subset_z
 
 
@@ -213,25 +222,3 @@ def get_lagged_returns(returns, lags):
         lagged_returns = np.hstack((lagged_returns, lagged_feature.transpose()))
 
     return lagged_returns
-
-
-def directed_information_tickers(ticker_source, ticker_target,
-                                 tickers_cond=[], order=1, estimator=prob.KNN()):
-    return 0
-    # prepare data of tickers
-    df_source = pd.read_csv(f'./data/{ticker_source}.csv')
-    df_target = pd.read_csv(f'./data/{ticker_target}.csv')
-    df_others = [pd.read_csv(f'./data/{o}.csv') for o in tickers_other]
-
-    returns_source = np.array(df_source['Returns'])
-    returns_target = np.array(df_target['Returns'])
-    returns_others = np.array([df['Returns'] for df in df_others])
-
-    # TODO: select subset of others with highest correlation
-    # corr_matrix = [np.corrcoef(returns_target, o) for o in returns_others]
-    cond = None
-
-    return directed_information(returns_source.transpose(),
-                                returns_target.transpose(), cond, estimator)
-
-
