@@ -190,19 +190,18 @@ class VAR:
 
 
     # TODO: subset selection?
-    def directed_information_graph(self, plot=False, threshold=0.05, subset_selection=None):
+    def directed_information_graph(self, threshold=0.05, subset_selection=None):
         """"
         Compute directed information (DI) between all variables and plot results
         in a Direct Information Graph (DIG).
 
         Parameters:
         - threshold (float): The threshold for DI in graph (default is 0.05).
-        - plot (boolean): Whether the graph should be plotted or not.
         - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
 
         Returns:
-        - di_matrix (numpy.ndarray) or graphviz.Digraph: A matrix containing DI values between all variables
-        or the graphical representation of the DIG, depending on the parameter plot.
+        - di_matrix (numpy.ndarray): A matrix containing DI values for all variables.
+        - plot (graphviz.Digraph): Visual representation of DIG.
         """
 
         for i in range(self.m):
@@ -210,11 +209,10 @@ class VAR:
                 z = [r for r in range(self.m) if r != i and r != j]
                 self.di_matrix[i, j] = self.directed_information(i, j, z)
 
-        if plot:
-            labels = [f'X{i}' for i in range(self.m)]
-            graph = utils.plot_directed_graph('dig', np.array([self.di_matrix]), labels, threshold)
+        labels = [f'X{i}' for i in range(self.m)]
+        plot = utils.plot_directed_graph('dig', np.array([self.di_matrix]), labels, threshold)
 
-        return graph if plot else self.di_matrix
+        return self.di_matrix, plot
 
 
     def get_VAR1(self):
@@ -437,19 +435,19 @@ class NVAR:
 
 
     # TODO: subset selection?
-    def directed_information_graph(self, plot=False, threshold=0.05, subset_selection=None):
+    def directed_information_graph(self, threshold=0.05, subset_selection=None):
         """"
         Compute directed information (DI) between all variables and plot results
         in a Direct Information Graph (DIG).
 
         Parameters:
         - threshold (float): The threshold for DI in graph (default is 0.05).
-        - plot (boolean): Whether the graph should be plotted or not.
         - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
 
         Returns:
-        - di_matrix (numpy.ndarray) or graphviz.Digraph: A matrix containing DI values between all variables
-        or the graphical representation of the DIG, depending on the parameter plot.
+        - di_matrix (numpy.ndarray): A matrix containing DI values between for variables.
+        - plot (graphviz.Digraph): Visual representation of DIG.
+
         """
 
         for i in range(self.m):
@@ -457,8 +455,7 @@ class NVAR:
                 z = [r for r in range(self.m) if r != i and r != j]
                 self.di_matrix[i, j] = self.directed_information(i, j, z)
 
-        if plot:
-            labels = [f'X{i}' for i in range(self.m)]
-            graph = utils.plot_directed_graph('dig', np.array([self.di_matrix]), labels, threshold)
+        labels = [f'X{i}' for i in range(self.m)]
+        plot = utils.plot_directed_graph('dig', np.array([self.di_matrix]), labels, threshold)
 
-        return graph if plot else self.di_matrix
+        return self.di_matrix, plot

@@ -23,7 +23,8 @@ def download_index(index, start_date, end_date, interval='1d'):
     - interval (str): The data interval (default is '1d' for daily).
 
     Returns:
-    - tickers (list): A list of ticker symbols downloaded for specified index.
+    - tickers (dictionary): A dictionary mapping each ticker symbol of the index 
+    to its returns in percent.
     """
 
     if index == Index.SP100:
@@ -41,20 +42,24 @@ def download_index(index, start_date, end_date, interval='1d'):
 
 def download_tickers(tickers, start_date, end_date, interval='1d'):
     """
-    Download historical stock price data for a list of ticker symbols.
+    Download historical stock price data for a list of ticker symbols and calculate returns.
 
     Parameters:
     - tickers (list): A list of ticker symbols to download.
-    - start_date (datetime): The start date for data download.
-    - end_date (datetime): The end date for data download.
+    - start_date (datetime): The start date for the data download.
+    - end_date (datetime): The end date for the data download.
     - interval (str): The data interval (default is '1d' for daily).
 
     Returns:
-    - None
-    """
+    - ticker_returns (dictionary): A dictionary mapping each ticker symbol to its returns in percent.
 
+    Note:
+    - The function assumes that the input dates are valid and that the tickers exist in the data source.
+    - If a ticker's data is empty or unavailable, it will not be included in the returned dictionary.
+    """
     print(f'Starting download for data of {len(tickers)} tickers...')
 
+    ticker_returns = {}
     for i, ticker in enumerate(tickers):
         print(f'Downloading {ticker}: {i + 1}/{len(tickers)}')
 
@@ -67,8 +72,11 @@ def download_tickers(tickers, start_date, end_date, interval='1d'):
 
         if not data.empty:
             data['Returns'].to_csv(f'./data/{ticker}.csv')
+            ticker_returns[ticker] = data['Returns']
 
     print('Download complete')
+
+    return ticker_returns
 
 
 def clean_up():
@@ -145,7 +153,7 @@ def plot_directed_graph(draw, data, labels, threshold=0.05):
                     name_from = f'{labels[j]}_t-{o + 1}'
                     influence = data[o, i, j]
 
-                    if draw == 'nvar' and influence != 's':
+                    if draw == 'nvar' and influence != '':
                         graph.edge(name_from, name_to, label=f'{influence}')
                     elif draw == 'var' and influence > 0:
                         graph.edge(name_from, name_to, label=f'{influence:.3f}')

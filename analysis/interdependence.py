@@ -93,8 +93,8 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
     - estimator (object): An estimator for probability density functions (KDE or KNN).
 
     Returns:
-    - di_matrix (numpy.ndarray): A matrix containing DI values between all variables.
-    - plot (graphviz.Digraph): Visual representation of 
+    - di_matrix (numpy.ndarray): A matrix containing DI values for all variables.
+    - plot (graphviz.Digraph): Visual representation of DIG.
     """
     n_vars = len(returns[0])
     di_matrix = np.zeros((n_vars, n_vars))
@@ -116,7 +116,7 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
     if labels is not None:
         plot = utils.plot_directed_graph('dig', di_matrix, labels, threshold)
         return di_matrix, plot
-    
+
     return di_matrix, None
 
 
@@ -197,7 +197,7 @@ def get_lagged_returns(returns, lags):
 
     Example:
     Turns (X_t, Y_t, Z_t, ...) with [(f0, l0), (f1, l1), (f2, l2), ...]
-    into (X_t-l0^t-f0, Y_t-l1^t-f2, Z_t-l2^t-f2, ...) or in python notation
+    into (X_t_l0^t-f0, Y_t-l1^t-f2, Z_t-l2^t-f2, ...) or in python notation
     (X[t-l0 : t-f0+1], Y[t-l1 : t-f1+1], Z[t-l2 : t-f2+1], ...)
 
 
@@ -211,8 +211,8 @@ def get_lagged_returns(returns, lags):
     n_features = len(returns[0])
     max_lag = max([t[1] for t in lags]) if lags != [] else 0
 
-    if n_features != len(lags) or max_lag >= len(returns):
-        raise Exception('error get_lagged_returns()')
+    assert n_features == len(lags)
+    assert max_lag < len(returns)
 
     lagged_returns = [[] for _ in range(len(returns) - max_lag)]
 
