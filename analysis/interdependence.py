@@ -76,9 +76,6 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     return di / T
 
 
-# TODO: DI and DIG with ticker names 
-
-# TODO: time-varying DIG
 def directed_information_graph(returns, labels=None, threshold=0.05, order=1, subset_selection=None, estimator=prob.KNN()):
     """"
     Compute directed information (DI) between all variables and plot results
@@ -94,7 +91,8 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
 
     Returns:
     - di_matrix (numpy.ndarray): A matrix containing DI values for all variables.
-    - plot (graphviz.Digraph): Visual representation of DIG.
+    - plot (graphviz.Digraph or None): Visual representation of DIG if labels are provided,
+    else None.
     """
     n_vars = len(returns[0])
     di_matrix = np.zeros((n_vars, n_vars))
@@ -120,9 +118,9 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
     return di_matrix, None
 
 
-def rolling_window(window_size, step_size, x, y, z=None, order=1, subset_selection=None, estimator=prob.KNN()):
+def time_varying_di(window_size, step_size, x, y, z=None, order=1, subset_selection=None, estimator=prob.KNN()):
     """
-    Estimate time-varying Directed Information using a rolling window approach.
+    Estimate time-varying Directed Information using rolling window.
 
     Parameters:
     - window_size (int): The size of the rolling window.
@@ -135,7 +133,7 @@ def rolling_window(window_size, step_size, x, y, z=None, order=1, subset_selecti
     - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
 
     Returns:
-    - di (numpy.ndarray): A list of time-varying Directed Information values estimated for each window.
+    - di (numpy.ndarray): A list of time-varying Directed Information values for each window.
     """
     di = []
     num_steps = (len(x) - window_size) // step_size
@@ -162,6 +160,44 @@ def rolling_window(window_size, step_size, x, y, z=None, order=1, subset_selecti
     di.append(di_window)
 
     return np.array(di)
+
+
+def time_varying_dig(returns, window_size, step_size, order=1, subset_selection=None, estimator=prob.KNN()):
+    """
+    Compute time-varying directed information (DI) between all variables using rolling window.
+
+    Parameters:
+    - returns (numpy.ndarray): A list of return samples of form [[x1, y1, ...], [x2, y2, ...], ...].
+    - window_size (int): The size of the rolling window.
+    - step_size (int): The step size for moving the rolling window.
+    - order (int): The memory order (lag) for DI estimation (default is 1).
+    - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
+    - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
+
+    Returns:
+    - di_matrix (numpy.ndarray): A 3D list of time-varying Directed Information values between all variables.
+
+    """
+    n_vars = len(returns[0])
+    di_matrix = []
+
+    # compute directed information for every pair
+    for i in range(n_vars):
+        x = returns[:, [i]]
+
+        di_from_x = []
+        for j in range(n_vars):
+            y = returns[:, [j]]
+            # exclude i, j from z causally conditioned on
+            cols = [r for r in range(n_vars) if r != i and r != j]
+            z = returns[:, cols]
+
+            di = time_varying_di(window_size, step_size, x, y, z, order, subset_selection, estimator)
+            di_from_x.append(di)
+
+        di_matrix.append(di_from_x)
+
+    return np.array(di_matrix)
 
 
 def select_subset(y, z, subset_selection):
