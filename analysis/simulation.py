@@ -16,7 +16,6 @@ class VAR:
         Returns:
         - None
         """
-
         self.m = m
         self.order = order
         self.coefficients = []
@@ -103,8 +102,7 @@ class VAR:
         - timeseries (numpy.ndarray): Simulated time series data with shape (m, n_steps).
         """
 
-        if not self.generated:
-            self.generate(self.m * self.order / 2)
+        assert self.generated, 'VAR model can not be simulated wihtout being generate first.'
 
         # extra steps to ensure stationarity of timeseries
         n_stationary = 300
@@ -189,7 +187,6 @@ class VAR:
         return di
 
 
-    # TODO: subset selection?
     def directed_information_graph(self, threshold=0.05, subset_selection=None):
         """"
         Compute directed information (DI) between all variables and plot results
@@ -258,7 +255,6 @@ class NVAR:
         Returns:
         - None
         """
-
         self.m = m
         self.order = order
         self.functions = []
@@ -347,8 +343,7 @@ class NVAR:
         Returns:
         - timeseries (numpy.ndarray): Simulated time series data with shape (m, n_steps).
         """
-        if not self.generated:
-            self.generate(self.m * self.order / 2)
+        assert self.generated, 'NVAR model can not be simulated wihtout being generate first.'
 
         # extra steps to ensure stationarity of timeseries
         n_stationary = 300
@@ -434,7 +429,6 @@ class NVAR:
         return di
 
 
-    # TODO: subset selection?
     def directed_information_graph(self, threshold=0.05, subset_selection=None):
         """"
         Compute directed information (DI) between all variables and plot results
