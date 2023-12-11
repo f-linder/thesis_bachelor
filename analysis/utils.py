@@ -3,6 +3,7 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy import stats, linalg
 from graphviz import Digraph
 from enum import Enum
 
@@ -103,6 +104,41 @@ def clean_up():
     print('Clean up complete: removed all .csv files')
 
 
+def partial_correlation(target, features, control):
+    """
+    Calculate partial correlations between the target and each feature
+    while controlling for the specified variables.
+
+    Parameters:
+    - target (numpy.ndarray): 1D array, target variable with n samples.
+    - features (numpy.ndarray): 2D array, n x d matrix of features.
+    - control (numpy.ndarray): 2D array, n x p matrix of control variables.
+
+    Returns:
+    - partial_corrs (numpy.ndarray): 1D array, partial correlations for each feature.
+    """
+    assert target.ndim == 1, 'Target vector must be one-dimensional'
+    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
+    assert target.shape[0] == control.shape[0], 'Sample size of target and control must match'
+
+    matrix = np.hstack((features, np.array([target]).transpose(), control))
+    corr = np.corrcoef(matrix, rowvar=False)
+    corr_inv = np.linalg.inv(corr)
+
+    dim = features.shape[1]
+    partial_corrs = np.zeros(dim)
+
+    # j = dim is index of target vector
+    for i in range(dim):
+        p_ij = corr_inv[i, dim]
+        p_ii = corr_inv[i, i]
+        p_jj = corr_inv[dim, dim]
+
+        partial_corrs[i] = -p_ij / np.sqrt(p_ii * p_jj)
+
+    return partial_corrs
+
+
 def plot_directed_graph(draw, data, labels, threshold=0.05):
     """
     Generate and visualize a directed graph based on the given data and labels.
@@ -134,16 +170,16 @@ def plot_directed_graph(draw, data, labels, threshold=0.05):
         # add nodes of orders
         for o in range(order, 0, -1):
             with graph.subgraph(name=f't-{o}') as sub:
+                sub.attr(rank='same')
                 for i in range(n_vars):
                     name = f'{labels[i]}_t-{o}'
                     sub.node(name, label=name)
-                sub.attr(rank='same')
         # add nodes for time t
         with graph.subgraph(name='t') as sub:
+            sub.attr(rank='same')
             for i in range(n_vars):
                 name = f'{labels[i]}_t'
                 sub.node(name, label=name)
-            sub.attr(rank='same')
 
         # add edges
         for i in range(n_vars):
