@@ -31,18 +31,17 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     x_lagged = get_lagged_returns(x, [(1, order)])
     # (Y_t-l^t-1)
     y_lagged = get_lagged_returns(y, [(1, order)])
+
     # special case: I(X -> X || Z)
     if (x == y).all():
         y_lagged = np.array([[] for _ in range(len(y) - order)])
 
+    # set z corresponding to context and subset_selection
     if z is None or len(z[0]) == 0:
-        print('z not present: set to empty array []')
         z = np.array([[] for _ in range(len(x) - order)])
     elif subset_selection is not None:
-        print('select subset')
         z = select_subset(y, z, subset_selection, order)
     else:
-        print('z_present: get_lagged_returns')
         z = get_lagged_returns(z, [(1, order) for _ in range(len(z[0]))])
 
     # samples corresponding to entropy terms
@@ -72,7 +71,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
 
         di += mi
 
-    # ruling out negative estimates
+    # correcting negative estimates to be zero
     return di / T if di >= 0 else 0
 
 
@@ -107,7 +106,6 @@ def directed_information_graph(returns, labels=None, threshold=0.05, order=1, su
             cols = [r for r in range(n_vars) if r != i and r != j]
             z = returns[:, cols]
 
-            print(f'from={i}, to={j}, on={cols}')
             di = directed_information(x, y, z, order, subset_selection, estimator)
             di_matrix[i, j] = di
 
@@ -220,8 +218,8 @@ def select_subset(y, z, subset_selection, order=1):
     Returns a subset of z according to the given subset_selection object.
 
     Parameters:
-    - y (numpy.ndarray): List of return samples (of one variable).
-    - z (numpy.ndarray): List of return samples (of multiple variables).
+    - y (numpy.ndarray): A 2D array of samples (of one variable).
+    - z (numpy.ndarray): A 2D array of samples (of multiple variables).
     - subset_selection (object): Policy used to determine subset of z.
 
     Returns:
@@ -229,99 +227,200 @@ def select_subset(y, z, subset_selection, order=1):
     """
     assert y.shape[0] == z.shape[0], 'Sample size of y and z must match'
 
-    n_samples = y.shape[0]
-
-    # return empty array
     if subset_selection.policy == Policies.PAIRWISE:
+        n_samples = y.shape[0]
+        # return empty array
         return np.array([[] for _ in range(n_samples - order)])
 
-    # cor(Y_t, Z_t-l^t-1)
     elif subset_selection.policy == Policies.CORRELATION:
-        # compute correlation between y and every lag and feature in z
-        cor_matrix = np.zeros((order, len(z[0])))
-        for o in range(1, order + 1):
-            cor = np.corrcoef(y[o:], z[:-o], rowvar=False)
-            cor = np.abs(cor[0, 1:])
-            cor_matrix[o - 1, :] = cor
+        return subset_correlation(y, z, subset_selection.n, subset_selection.cut_off, order)
 
-        cor_order_index = np.array([(value, o + 1, i) for o, row in enumerate(cor_matrix) for i, value in enumerate(row)])
-        # discard insignificant correlations
-        cor_order_index = cor_order_index[cor_order_index[:, 0] >= subset_selection.cut_off]
-        cor_order_index = sorted(cor_order_index, key=lambda x: x[0])
-        max_order_indices = [(int(o), int(i)) for (_, o, i) in cor_order_index][-subset_selection.n:]
-
-        print(f'cor_matrix={cor_matrix}')
-        print(f'max_order_indices = {max_order_indices}')
-        subset_z = [[] for _ in range(n_samples - order)]
-        for o, i in max_order_indices:
-            subset_z = np.hstack((subset_z, z[order-o:-o, [i]]))
-
-        return np.array(subset_z)
-
-    # I(Y_t, Z_t-l^t-1)
     elif subset_selection.policy == Policies.MUTUAL_INFORMATION:
-        # compute mutual information between y and every lag and feature in z
-        mi_matrix = np.zeros((order, len(z[0])))
-        for o in range(1, order + 1):
-            mi = mutual_info_regression(z[:-o, :], y.transpose()[0, o:])
-            mi_matrix[o - 1, :] = mi
+        return subset_mutual_information(y, z, subset_selection.n, subset_selection.cut_off, order)
 
-        mi_order_index = np.array([(value, o + 1, i) for o, row in enumerate(mi_matrix) for i, value in enumerate(row)])
-        # discard insignificant mutual information
-        mi_order_index = mi_order_index[mi_order_index[:, 0] >= subset_selection.cut_off]
-        mi_order_index = sorted(mi_order_index, key=lambda x: x[0])
-        max_order_indices = [(int(o), int(i)) for (_, o, i) in mi_order_index][-subset_selection.n:]
+    elif subset_selection.policy == Policies.PC_ALGORITHM:
+        return subset_PC(y, z, subset_selection.n, subset_selection.cut_off, order)
 
-        print(f'mi_matrix={mi_matrix}')
-        print(f'max_order_indices = {max_order_indices}')
-        subset_z = [[] for _ in range(n_samples - order)]
-        for o, i in max_order_indices:
-            subset_z = np.hstack((subset_z, z[order-o:-o, [i]]))
 
-        return np.array(subset_z)
+def subset_correlation(target, features, n, cut_off=0.05, order=1):
+    """
+    Selects a subset from features with the highest correlation to the
+    target vector.
+
+    Parameters:
+    - target (np.ndarray): A 2D array of samples of the target variable.
+    - features (np.ndarray): A 2D array of samples of the features to select
+    from.
+    - n (int): The desired subset size.
+    - cut_off (float): The cutoff value for significant correlation.
+    - order (int): The order or maximum lag to consider (default is 1).
+
+    Returns:
+    - np.ndarray: A subset of features based on correlation criteria.
+    """
+    n_samples = target.shape[0]
+    n_features = features.shape[1]
+
+    cor_matrix = np.zeros((order, n_features))
+    for o in range(1, order + 1):
+        cor = np.corrcoef(target[o:], features[:-o], rowvar=False)
+        cor = np.abs(cor[0, 1:])
+        cor_matrix[o - 1, :] = cor
+
+    cor_order_index = np.array([(value, o + 1, i) for o, row in enumerate(cor_matrix) for i, value in enumerate(row)])
+    # discard insignificant correlations and order them by significance
+    cor_order_index = cor_order_index[cor_order_index[:, 0] >= cut_off]
+    cor_order_index = sorted(cor_order_index, key=lambda x: x[0])
+    max_order_indices = [(int(o), int(i)) for (_, o, i) in cor_order_index][-n:]
+
+    subset = [[] for _ in range(n_samples - order)]
+    for o, i in max_order_indices:
+        subset = np.hstack((subset, features[order-o:-o, [i]]))
+
+    return np.array(subset)
+
+
+def subset_mutual_information(target, features, n, cut_off=0.05, order=1):
+    """
+    Selects a subset from features with the highest mutual information
+    with the target vector.
+
+    Parameters:
+    - target (np.ndarray): A 2D array of samples of the target variable.
+    - features (np.ndarray): A 2D array of samples of the features to select
+    from.
+    - n (int): The desired subset size.
+    - cut_off (float): The cutoff value for significant correlation.
+    - order (int): The order or maximum lag to consider (default is 1).
+
+    Returns:
+    - np.ndarray: A subset of features based on mutual information criteria.
+    """
+
+    n_samples = target.shape[0]
+    n_features = features.shape[1]
+    # compute mutual information between y and every lag and feature in z
+    mi_matrix = np.zeros((order, n_features))
+    for o in range(1, order + 1):
+        mi = mutual_info_regression(features[:-o, :], target.transpose()[0, o:])
+        mi_matrix[o - 1, :] = mi
+
+    mi_order_index = np.array([(value, o + 1, i) for o, row in enumerate(mi_matrix) for i, value in enumerate(row)])
+    # discard insignificant mutual information
+    mi_order_index = mi_order_index[mi_order_index[:, 0] >= cut_off]
+    mi_order_index = sorted(mi_order_index, key=lambda x: x[0])
+    max_order_indices = [(int(o), int(i)) for (_, o, i) in mi_order_index][-n:]
+
+    subset = [[] for _ in range(n_samples - order)]
+    for o, i in max_order_indices:
+        subset = np.hstack((subset, features[order-o:-o, [i]]))
+
+    return np.array(subset)
+
+
+def subset_PC(target, features, n, cut_off=0.05, order=1):
+    """
+    Iteratively builds a subset from features using parial correlation.
+    In the first iteration the variabel with the highest normal correlation
+    is selected and added to a set S. In the following iterations the variable
+    with the highest correlation controlling for S will be selected and added.
+    This ensures that the subset has low internal corrlation but high 
+    correlation to the target. The 
+
+    Parameters:
+    - target (np.ndarray): A array of samples of the target variable.
+    - features (np.ndarray): A 2D array of samples of the features to select
+    from.
+    - n (int): The desired subset size.
+    - cut_off (float): The cutoff value for significant correlation.
+    - order (int): The order or maximum lag to consider (default is 1).
+
+    Returns:
+    - np.ndarray: A subset of features based on mutual information criteria.
+    """
+
+    n_samples = target.shape[0]
+    n_features = features.shape[1]
+
+    # list of selected (order, idx) tuples
+    selected = []
 
     # iteratively build set causally conditioned on by selecting variables
     # that have highest partial correlation given the already selected variables
-    elif subset_selection.policy == Policies.PC_ALGORITHM:
-        # list of selected order + indices
-        selected = []
+    for i in range(n):
+        partial_cor = np.zeros((order, n_features))
 
-        for i in range(subset_selection.n):
-            partial_cor = np.zeros((order, len(z[0])))
-            for o in range(1, order + 1):
-                # first step without controlling variable, use normal correlation
-                if i == 0:
-                    cor = np.corrcoef(y[o:], z[:-o], rowvar=False)
-                    partial_cor[o - 1, :] = np.abs(cor[0, 1:])
-                else:
-                    target = y.transpose()[0][order:]
-                    features_indices = np.array([(o, x) not in selected for x in range(len(z[0]))])
-                    # no more features to condition on left for this lag
-                    if (features_indices == False).all():
-                        break
-                    features = z[order - o:-o, features_indices]
-                    control = [[] for _ in range(len(z) - order)]
-                    for ord, idx in selected:
-                        control = np.hstack((control, z[order - ord:-ord, [idx]]))
+        # calculate partial correlation controlling for selected for each lag
+        for o in range(1, order + 1):
+            # first step without controlling variable, use normal correlation
+            if i == 0:
+                cor = np.corrcoef(target[o:], features[:-o], rowvar=False)
+                partial_cor[o - 1, :] = np.abs(cor[0, 1:])
+            else:
+                target = target.transpose()[0][order:]
+                features_indices = np.array([(o, x) not in selected for x in range(n_features)])
+                # no more features to condition on left for this lag
+                if (features_indices is False).all():
+                    break
+                features = features[order - o:-o, features_indices]
+                control = [[] for _ in range(n_samples - order)]
+                for ord, idx in selected:
+                    control = np.hstack((control, features[order - ord:-ord, [idx]]))
 
-                    partial_cor[o - 1, :] = utils.partial_correlation(target, features, control)
+                partial_cor[o - 1, :] = partial_correlation(target, features, control)
 
-            cor_order_index = np.array([(value, o + 1, i) for o, row in enumerate(partial_cor) for i, value in enumerate(row)])
-            cor_order_index = cor_order_index[cor_order_index[:, 0] >= subset_selection.cut_off]
-            # no significant correlations left
-            if len(cor_order_index) == 0:
-                break
+        # cut insignificant partial correlation
+        cor_order_index = np.array([(value, o + 1, i) for o, row in enumerate(partial_cor) for i, value in enumerate(row)])
+        cor_order_index = cor_order_index[cor_order_index[:, 0] >= cut_off]
 
-            _, max_order, max_index = sorted(cor_order_index, key=lambda x: x[0])[-1]
-            selected.append((int(max_order), int(max_index)))
-            print(f'selected={selected}')
+        # no significant correlations left
+        if len(cor_order_index) == 0:
+            break
 
-        subset_z = [[] for _ in range(n_samples - order)]
-        for o, i in selected:
-            subset_z = np.hstack((subset_z, z[order - o:-o, [i]]))
+        # add most significant to set controlled for in next iteration
+        _, max_order, max_index = sorted(cor_order_index, key=lambda x: x[0])[-1]
+        selected.append((int(max_order), int(max_index)))
 
-        print('-----------------------------------------')
-        return np.array(subset_z)
+    subset = [[] for _ in range(n_samples - order)]
+    for o, i in selected:
+        subset = np.hstack((subset, features[order - o:-o, [i]]))
+
+    return np.array(subset)
+
+
+def partial_correlation(target, features, control):
+    """
+    Calculate partial correlations between the target and each feature
+    while controlling for the specified variables.
+
+    Parameters:
+    - target (numpy.ndarray): 1D array, target variable with n samples.
+    - features (numpy.ndarray): 2D array, n x d matrix of features.
+    - control (numpy.ndarray): 2D array, n x p matrix of control variables.
+
+    Returns:
+    - partial_corrs (numpy.ndarray): 1D array, partial correlations for each feature.
+    """
+    assert target.ndim == 1, 'Target vector must be one-dimensional'
+    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
+    assert target.shape[0] == control.shape[0], 'Sample size of target and control must match'
+
+    matrix = np.hstack((features, np.array([target]).transpose(), control))
+    corr = np.corrcoef(matrix, rowvar=False)
+    corr_inv = np.linalg.inv(corr)
+
+    dim = features.shape[1]
+    partial_corrs = np.zeros(dim)
+
+    # j = dim is index of target vector
+    for i in range(dim):
+        p_ij = corr_inv[i, dim]
+        p_ii = corr_inv[i, i]
+        p_jj = corr_inv[dim, dim]
+
+        partial_corrs[i] = -p_ij / np.sqrt(p_ii * p_jj)
+
+    return partial_corrs
 
 
 def get_lagged_returns(returns, lags):

@@ -13,25 +13,32 @@ class KDE:
 # K-Nearest Neighbor Estimator
 class KNN:
     def __init__(self, k=None, metric='euclidean'):
+        # if k is not set pdf uses k=math.ceil(np.sqrt(num_samples))
         self.k = k
         self.metric = metric
 
 
-def pdf(estimator, returns):
+def pdf(estimator, samples):
     """
     Calculate the joint probability density function (PDF) for a given
     estimator and sample data.
 
     Parameters:
     - estimator (KDE or KNN): The estimator used.
-    - returns (np.ndarray): List of return samples of the form [[x1, y1, ...], [x2, y2, ...], ...]
+    - samples (np.ndarray): A 2D array where each row represents a sample and
+    each column represents a different variable: [[x1, y1, z1, ...],
+                                                  [x2, y2, z2, ...],
+                                                  [x3, y3, z3, ...],
+                                                  ...              ]
 
     Returns:
     - density_function (function): A function taking a list of values [x, y, ...] and calculating Pr(X=x, Y=y, ...)
     """
+    assert samples.ndim == 2, 'Sample array must be 2 dimensional'
+
     if isinstance(estimator, KDE):
         kde = KernelDensity(kernel=estimator.kernel, bandwidth=estimator.bandwidth)
-        kde.fit(returns)
+        kde.fit(samples)
 
         def density_function(values):
             log_density = kde.score([values])
@@ -41,16 +48,17 @@ def pdf(estimator, returns):
         return density_function
 
     elif isinstance(estimator, KNN):
-        n = len(returns)
-        d = len(returns[0])
-        k = estimator.k if estimator.k else math.ceil(np.sqrt(n) / 2)
-        knn = NearestNeighbors(n_neighbors=k, metric=estimator.metric).fit(returns)
+        n_samples = samples.shape[0]
+        # number of features
+        dim = samples.shape[1]
+        k = estimator.k if estimator.k else math.ceil(np.sqrt(n_samples) / 2)
+        knn = NearestNeighbors(n_neighbors=k, metric=estimator.metric).fit(samples)
 
         def density_function(values):
             distances, _ = knn.kneighbors([values])
             radius = np.max(distances)
-            # volume of d-dimensional hypersphere
-            volume = (np.pi ** (d / 2) / math.gamma(d / 2 + 1)) * (radius ** d)
-            return (k - 1) / (n * volume)
+            # volume of dim-dimensional hypersphere
+            volume = (np.pi ** (dim / 2) / math.gamma(dim / 2 + 1)) * (radius ** dim)
+            return (k - 1) / (n_samples * volume)
 
         return density_function

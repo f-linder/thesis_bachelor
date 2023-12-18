@@ -3,9 +3,15 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy import stats, linalg
 from graphviz import Digraph
 from enum import Enum
+
+
+'''
+##################################################################
+                    utils for acquiring data
+##################################################################
+'''
 
 
 class Index(Enum):
@@ -24,18 +30,18 @@ def download_index(index, start_date, end_date, interval='1d'):
     - interval (str): The data interval (default is '1d' for daily).
 
     Returns:
-    - tickers (dictionary): A dictionary mapping each ticker symbol of the index 
-    to its returns in percent.
+    - tickers (dictionary): A dictionary mapping each ticker symbol to its
+    returns in percent.
     """
 
     if index == Index.SP100:
-        print('Selected S&P100 data set')
+        print('Selected S&P100 data set:')
         tickers = pd.read_csv('./data/sp100.csv')['Symbol']
         download_tickers(tickers, start_date, end_date, interval)
         return tickers
 
     elif index == Index.SP500:
-        print('Selected S&P500 data set')
+        print('Selected S&P500 data set:')
         tickers = pd.read_csv('./data/sp500.csv')['Symbol']
         download_tickers(tickers, start_date, end_date, interval)
         return tickers
@@ -43,7 +49,8 @@ def download_index(index, start_date, end_date, interval='1d'):
 
 def download_tickers(tickers, start_date, end_date, interval='1d'):
     """
-    Download historical stock price data for a list of ticker symbols and calculate returns.
+    Download historical stock price data for a list of ticker symbols
+    using yfinance and calculate returns.
 
     Parameters:
     - tickers (list): A list of ticker symbols to download.
@@ -52,11 +59,14 @@ def download_tickers(tickers, start_date, end_date, interval='1d'):
     - interval (str): The data interval (default is '1d' for daily).
 
     Returns:
-    - ticker_returns (dictionary): A dictionary mapping each ticker symbol to its returns in percent.
+    - ticker_returns (dictionary): A dictionary mapping each ticker symbol to
+    its returns in percent.
 
     Note:
-    - The function assumes that the input dates are valid and that the tickers exist in the data source.
-    - If a ticker's data is empty or unavailable, it will not be included in the returned dictionary.
+    - The function assumes that the input dates are valid and that the tickers
+    exist in the data source.
+    - If a ticker's data is empty or unavailable for yfinance, it will not be
+    included in the returned dictionary.
     """
     print(f'Starting download for data of {len(tickers)} tickers...')
 
@@ -82,7 +92,7 @@ def download_tickers(tickers, start_date, end_date, interval='1d'):
 
 def clean_up():
     """
-    Clean up downloaded data files, excluding specific files and directories.
+    Deleting downloaded data files, excluding specific files and directories.
 
     Parameters:
     - None
@@ -93,6 +103,7 @@ def clean_up():
 
     dir_path = './data'
     for filename in os.listdir(dir_path):
+        # do not delete index .csv files
         if filename in ['sp100.csv', 'sp500.csv', 'simulations']:
             continue
         os.remove(os.path.join(dir_path, filename))
@@ -104,39 +115,69 @@ def clean_up():
     print('Clean up complete: removed all .csv files')
 
 
-def partial_correlation(target, features, control):
+'''
+##################################################################
+            utils for simulations of VAR(p) models
+##################################################################
+'''
+
+
+def reduce_to_VAR1(coefficients):
     """
-    Calculate partial correlations between the target and each feature
-    while controlling for the specified variables.
+    Reduce the coefficient matrix of a VAR(p) model to coefficients of a VAR(1)
+    model, the companion form. The matrix is of shape (p x n_vars x n_vars).
 
     Parameters:
-    - target (numpy.ndarray): 1D array, target variable with n samples.
-    - features (numpy.ndarray): 2D array, n x d matrix of features.
-    - control (numpy.ndarray): 2D array, n x p matrix of control variables.
+    - coefficients (numpy.ndarray): The 3D coefficient array of a VAR(p) model.
 
     Returns:
-    - partial_corrs (numpy.ndarray): 1D array, partial correlations for each feature.
+    - F (numpy.ndarray): The coefficient matrix for VAR(1) in companion form.
     """
-    assert target.ndim == 1, 'Target vector must be one-dimensional'
-    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
-    assert target.shape[0] == control.shape[0], 'Sample size of target and control must match'
+    assert coefficients.ndim == 3, 'Coefficient matrix must be 3-dimensional'
+    assert coefficients.shape[1] == coefficients.shape[2], 'Coefficient matrix must be of shape (p x n_vars x n_vars)'
 
-    matrix = np.hstack((features, np.array([target]).transpose(), control))
-    corr = np.corrcoef(matrix, rowvar=False)
-    corr_inv = np.linalg.inv(corr)
+    p = coefficients.shape[0]
+    n_vars = coefficients.shape[1]
 
-    dim = features.shape[1]
-    partial_corrs = np.zeros(dim)
+    if p == 1:
+        return coefficients[0]
 
-    # j = dim is index of target vector
-    for i in range(dim):
-        p_ij = corr_inv[i, dim]
-        p_ii = corr_inv[i, i]
-        p_jj = corr_inv[dim, dim]
+    F_upper = np.hstack(coefficients)
+    F_lower = np.eye(n_vars * (p - 1), n_vars * p)
+    F = np.vstack((F_upper, F_lower))
 
-        partial_corrs[i] = -p_ij / np.sqrt(p_ii * p_jj)
+    return F
 
-    return partial_corrs
+
+def is_stable(companion_matrix, threshold=0.9):
+    """
+    Checks whether the VAR model corresponding to the companion_matrix is
+    stable. The maximum eigenvalue has to be non-zero and less or equal to
+    the threshold.
+
+    Parameters:
+    - companion_matrix (numpy.ndarray): A 2D array containing the coefficients
+    of every order.
+    - threshold (float): The threshold for the largest eigenvalue (default is 0.9).
+
+    Returns:
+    - boolean: True if model is stable, False otherwise.
+    """
+    assert companion_matrix.ndim == 2, 'Companion matrix must be 2-dimensional'
+    assert companion_matrix.shape[0] == companion_matrix.shape[1], 'Companion matrix must be of shape (m x m)'
+    assert threshold < 1, 'Stability not guaranteed for a threshold >= 1.'
+
+    eigenvalues = np.linalg.eigvals(companion_matrix)
+    max = np.max(np.abs(eigenvalues))
+
+    return True if max != 0 and max <= 0.9 else False
+
+
+'''
+##################################################################
+                        visualization
+##################################################################
+'''
 
 
 def plot_directed_graph(draw, data, labels, threshold=0.05):
@@ -144,42 +185,44 @@ def plot_directed_graph(draw, data, labels, threshold=0.05):
     Generate and visualize a directed graph based on the given data and labels.
 
     Parameters:
-    - draw (str): Specifies the type of graph to draw. Can be one of ['dig', 'var', 'nvar'].
+    - draw (str): Specifies the type of graph to draw.
+    Can be one of ['dig', 'var', 'nvar'].
     - data (numpy.ndarray): The directed information or influence data.
+    For a DIG it is the 2D adjecency matrix with DI values. For VAR is the 3D
+    array of coefficients for each lag. For NVAR it is the 3D string
+    representation array of the functions for each lag.
     - labels (list): List of labels for nodes in the graph.
-    - threshold (float): The threshold for edge inclusion in the graph (default is 0.05).
+    - threshold (float): The threshold for edge inclusion in the graph (default
+    is 0.05).
 
     Returns:
     - graphviz.Digraph: The generated directed graph.
     """
-    assert draw in ['dig', 'var', 'nvar']
+    assert draw in ['dig', 'var', 'nvar'], 'Draw must be one of ["dig", "var", "nvar"]'
+    assert len(labels) == data.shape[1]
 
-    n_vars = len(data[0])
-    graph = Digraph(format='svg', graph_attr={'color': 'lightblue2', 'rankdir': 'LR'})
+    n_vars = data.shape[1]
+    graph = Digraph(format='svg', engine='fdp', graph_attr={'color': 'lightblue', 'rankdir': 'LR', 'splines': 'true'})
 
     if draw == 'dig':
-        for label in labels:
-            graph.node(label, label=label)
         for i in range(n_vars):
             for j in range(n_vars):
-                influence = data[0, i, j]
+                influence = data[i, j]
                 if influence >= threshold:
+                    graph.node(labels[i], label=labels[i])
+                    graph.node(labels[j], label=labels[j])
                     graph.edge(labels[i], labels[j], label=f'{influence:.3f}')
     else:
         order = len(data)
-        # add nodes of orders
-        for o in range(order, 0, -1):
-            with graph.subgraph(name=f't-{o}') as sub:
-                sub.attr(rank='same')
-                for i in range(n_vars):
-                    name = f'{labels[i]}_t-{o}'
-                    sub.node(name, label=name)
-        # add nodes for time t
-        with graph.subgraph(name='t') as sub:
-            sub.attr(rank='same')
-            for i in range(n_vars):
-                name = f'{labels[i]}_t'
-                sub.node(name, label=name)
+        for i in range(n_vars):
+            # time t
+            name_t = f'{labels[i]}_t'
+            graph.node(name_t, label=name_t, pos=f'{n_vars * 2},{n_vars - i}!', color='blue')
+
+            for o in range(1, order + 1):
+                # time t-1
+                name = f'{labels[i]}_t-{o}'
+                graph.node(name, labels=name, pos=f'{(n_vars - o) * 2},{n_vars - i}!', color='lightblue')
 
         # add edges
         for i in range(n_vars):
@@ -191,7 +234,7 @@ def plot_directed_graph(draw, data, labels, threshold=0.05):
 
                     if draw == 'nvar' and influence != '':
                         graph.edge(name_from, name_to, label=f'{influence}')
-                    elif draw == 'var' and influence > 0:
+                    elif draw == 'var' and np.abs(influence) > 0:
                         graph.edge(name_from, name_to, label=f'{influence:.3f}')
 
     return graph
