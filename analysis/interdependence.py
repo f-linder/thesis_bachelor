@@ -7,30 +7,39 @@ from sklearn.feature_selection import mutual_info_regression
 
 def directed_information(x, y, z=None, order=1, subset_selection=None, estimator=prob.KNN()):
     """
-    Estimate I(X -> Y || Z), the Directed Information between two time series X and Y 
-    causally conditioned on a set of time series Z with memory of size l (order l).
-    Directed information can't be negative. If estimates turn out negative,
-    they are corrected to be zero.
+    Estimate I(X -> Y || Z), the Directed Information between two time series X
+    and Y causally conditioned on a set of time series Z with memory of size l
+    (order l). If estimates turn out negative, they are corrected to be zero.
 
     I(X -> Y || Z) = 1/T * Sum_t=1^T I(Y_t, X_t-l^t-1 | Y_t-l^t-1, Z_t-l^t-1)
-                   = 1/T * Sum_t=1^T H(Y_t, Y_t-l^t-1, Z_t-l^t-1) + H(X_t-l^t-1, Y_t-l^t-1, Z_t-l^t-1)
-                     - H(Y_t, Y_t-l^t-1, X_t-l^t-1 Z_t-l^t-1) - H(Y_t-l^t-1, Z_t-l^t-1)
+                   = 1/T * Sum_t=1^T [H(Y_t, Y_t-l^t-1, Z_t-l^t-1)
+                                      + H(X_t-l^t-1, Y_t-l^t-1, Z_t-l^t-1)
+                                      - H(Y_t, Y_t-l^t-1, X_t-l^t-1 Z_t-l^t-1)
+                                      - H(Y_t-l^t-1, Z_t-l^t-1)]
 
     Parameters:
-    - x (numpy.ndarray): The first time series (X).
-    - y (numpy.ndarray): The second time series (Y).
-    - z (numpy.ndarray or None): The set of time series causally conditioned on (Z).
+    - x (numpy.ndarray): A 2D array of time series data of form [[x1], [x2], ...].
+    - y (numpy.ndarray): A 2D array of time series data of form [[y1], [y2], ...].
+    - z (numpy.ndarray or None): A 2D array of time series data causally
+    conditioned on of form [[a1, b1, ...],
+                            [a2, b2, ...],
+                            ...]
     - order (int): The memory (or lag) for DI estimation (default is 1).
-    - subset_selection (SubsetSelection): Subset selection policy and used to determine set causally conditioned on.
-    - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
+    - subset_selection (SubsetSelection): Subset selection policy used to
+    determine set causally conditioned on.
+    - estimator (object): An estimator for probability density functions
+    (e.g., KDE or KNN).
 
     Returns:
     - di (float): The estimated Directed Information I(X -> Y || Z).
     """
+    assert x.shape[0] == y.shape[0], 'Sample size of x and y must match'
+    assert x.ndim == y.ndim == 2, 'x and y must be 2-dimensional arrays'
+
     # (X_t-l^t-1)
-    x_lagged = get_lagged_returns(x, [(1, order)])
+    x_lagged = get_lagged_samples(x, [(1, order)])
     # (Y_t-l^t-1)
-    y_lagged = get_lagged_returns(y, [(1, order)])
+    y_lagged = get_lagged_samples(y, [(1, order)])
 
     # special case: I(X -> X || Z)
     if (x == y).all():
@@ -42,7 +51,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     elif subset_selection is not None:
         z = select_subset(y, z, subset_selection, order)
     else:
-        z = get_lagged_returns(z, [(1, order) for _ in range(len(z[0]))])
+        z = get_lagged_samples(z, [(1, order) for _ in range(len(z[0]))])
 
     # samples corresponding to entropy terms
     ytyz = np.hstack((y[order:], y_lagged, z))
@@ -75,36 +84,44 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     return di / T if di >= 0 else 0
 
 
-def directed_information_graph(returns, labels=None, threshold=0.05, order=1, subset_selection=None, estimator=prob.KNN()):
+def directed_information_graph(samples, labels=None, threshold=0.05, order=1, subset_selection=None, estimator=prob.KNN()):
     """"
     Compute directed information (DI) between all variables and plot results
     in a Direct Information Graph (DIG).
 
     Parameters:
-    - returns (numpy.ndarray): A list of return samples of form [[x1, y1, ...], [x2, y2, ...], ...].
+    - samples (numpy.ndarray): A 2D array of time series data, where each row
+    represents a sample and each column a variable [[x1, y1, ...],
+                                                    [x2, y2, ...],
+                                                    ...].
     - labels (list or None): A list of labels for each variable (optional).
     - threshold (float): The threshold for DI in graph (default is 0.05).
     - order (int): The memory order (lag) for DI estimation (default is 1).
-    - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
-    - estimator (object): An estimator for probability density functions (KDE or KNN).
+    - subset_selection (object): Subset selection policy used to determine set
+    causally conditioned on.
+    - estimator (object): An estimator for probability density functions
+    (KDE or KNN).
 
     Returns:
-    - di_matrix (numpy.ndarray): A matrix containing DI values for all variables.
-    - plot (graphviz.Digraph or None): Visual representation of DIG if labels are provided,
-    else None.
+    - di_matrix (numpy.ndarray): A matrix containing DI values between
+    all variables.
+    - plot (graphviz.Digraph or None): Visual representation of DIG if labels
+    are provided, else None.
     """
-    n_vars = len(returns[0])
+    assert samples.ndim == 2, 'Sample array must be 2-dimensional'
+
+    n_vars = samples.shape[1]
     di_matrix = np.zeros((n_vars, n_vars))
 
     # compute directed information for every pair
     for i in range(n_vars):
-        x = returns[:, [i]]
+        x = samples[:, [i]]
 
         for j in range(n_vars):
-            y = returns[:, [j]]
+            y = samples[:, [j]]
             # exclude i, j from z causally conditioned on
             cols = [r for r in range(n_vars) if r != i and r != j]
-            z = returns[:, cols]
+            z = samples[:, cols]
 
             di = directed_information(x, y, z, order, subset_selection, estimator)
             di_matrix[i, j] = di
@@ -134,6 +151,9 @@ def time_varying_di(window_size, step_size, x, y, z=None, order=1, subset_select
     Returns:
     - di (numpy.ndarray): A list of time-varying Directed Information values for each window.
     """
+    assert x.shape[0] == y.shape[0], 'Sample size of x and y must match'
+    assert x.ndim == y.ndim == 2, 'x and y must be 2-dimensional arrays'
+
     di = []
     num_steps = (len(x) - window_size) // step_size
 
@@ -161,35 +181,44 @@ def time_varying_di(window_size, step_size, x, y, z=None, order=1, subset_select
     return np.array(di)
 
 
-def time_varying_dig(returns, window_size, step_size, order=1, subset_selection=None, estimator=prob.KNN()):
+def time_varying_dig(samples, window_size, step_size, order=1, subset_selection=None, estimator=prob.KNN()):
     """
-    Compute time-varying directed information (DI) between all variables using rolling window.
+    Compute time-varying directed information (DI) between all variables using
+    rolling window.
 
     Parameters:
-    - returns (numpy.ndarray): A list of return samples of form [[x1, y1, ...], [x2, y2, ...], ...].
+    - samples (numpy.ndarray): A 2D array of time series data, where each row
+    represents a sample and each column a variable [[x1, y1, ...],
+                                                    [x2, y2, ...],
+                                                    ...].
     - window_size (int): The size of the rolling window.
     - step_size (int): The step size for moving the rolling window.
     - order (int): The memory order (lag) for DI estimation (default is 1).
-    - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
-    - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
+    - subset_selection (object): Subset selection policy used to determine set
+    causally conditioned on.
+    - estimator (object): An estimator for probability density functions
+    (e.g., KDE or KNN).
 
     Returns:
-    - di_matrix (numpy.ndarray): A 3D list of time-varying Directed Information values between all variables.
+    - di_matrix (numpy.ndarray): A 3D list of time-varying DI
+    values between all variables.
 
     """
-    n_vars = len(returns[0])
+    assert samples.ndim == 2, 'Sample array must be 2-dimensional'
+
+    n_vars = samples.shape[1]
     di_matrix = []
 
     # compute directed information for every pair
     for i in range(n_vars):
-        x = returns[:, [i]]
+        x = samples[:, [i]]
 
         di_from_x = []
         for j in range(n_vars):
-            y = returns[:, [j]]
+            y = samples[:, [j]]
             # exclude i, j from z causally conditioned on
             cols = [r for r in range(n_vars) if r != i and r != j]
-            z = returns[:, cols]
+            z = samples[:, cols]
 
             di = time_varying_di(window_size, step_size, x, y, z, order, subset_selection, estimator)
             di_from_x.append(di)
@@ -213,51 +242,57 @@ class Policies(Enum):
     PC_ALGORITHM = 4
 
 
-def select_subset(y, z, subset_selection, order=1):
+def select_subset(target, features, subset_selection, order=1):
     """
     Returns a subset of z according to the given subset_selection object.
 
     Parameters:
-    - y (numpy.ndarray): A 2D array of samples (of one variable).
-    - z (numpy.ndarray): A 2D array of samples (of multiple variables).
-    - subset_selection (object): Policy used to determine subset of z.
+    - target (numpy.ndarray): A 2D array of samples (of one variable).
+    - features (numpy.ndarray): A 2D array of samples (of multiple variables).
+    - subset_selection (SubsetSelection): Policy used to determine subset of
+    the features.
 
     Returns:
-    - subset_z (numpy.ndarray): List of return samples of a subset of the variables given in z.
+    - (numpy.ndarray): Subset of the feature variables selected with given
+    selection policy.
     """
-    assert y.shape[0] == z.shape[0], 'Sample size of y and z must match'
+    assert target.ndim == features.ndim == 2, 'Target and feature arrays must be 2-dimensional'
+    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
 
     if subset_selection.policy == Policies.PAIRWISE:
-        n_samples = y.shape[0]
+        n_samples = target.shape[0]
         # return empty array
         return np.array([[] for _ in range(n_samples - order)])
 
     elif subset_selection.policy == Policies.CORRELATION:
-        return subset_correlation(y, z, subset_selection.n, subset_selection.cut_off, order)
+        return subset_correlation(target, features, subset_selection.n, subset_selection.cut_off, order)
 
     elif subset_selection.policy == Policies.MUTUAL_INFORMATION:
-        return subset_mutual_information(y, z, subset_selection.n, subset_selection.cut_off, order)
+        return subset_mutual_information(target, features, subset_selection.n, subset_selection.cut_off, order)
 
     elif subset_selection.policy == Policies.PC_ALGORITHM:
-        return subset_PC(y, z, subset_selection.n, subset_selection.cut_off, order)
+        return subset_PC(target, features, subset_selection.n, subset_selection.cut_off, order)
 
 
-def subset_correlation(target, features, n, cut_off=0.05, order=1):
+def subset_correlation(target, features, size, cut_off=0.05, order=1):
     """
     Selects a subset from features with the highest correlation to the
     target vector.
 
     Parameters:
-    - target (np.ndarray): A 2D array of samples of the target variable.
-    - features (np.ndarray): A 2D array of samples of the features to select
+    - target (numpy.ndarray): A 2D array of samples of the target variable.
+    - features (numpy.ndarray): A 2D array of samples of the features to select
     from.
-    - n (int): The desired subset size.
+    - size (int): The desired subset size.
     - cut_off (float): The cutoff value for significant correlation.
     - order (int): The order or maximum lag to consider (default is 1).
 
     Returns:
     - np.ndarray: A subset of features based on correlation criteria.
     """
+    assert target.ndim == features.ndim == 2, 'Target and feature arrays must be 2-dimensional'
+    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
+
     n_samples = target.shape[0]
     n_features = features.shape[1]
 
@@ -271,7 +306,7 @@ def subset_correlation(target, features, n, cut_off=0.05, order=1):
     # discard insignificant correlations and order them by significance
     cor_order_index = cor_order_index[cor_order_index[:, 0] >= cut_off]
     cor_order_index = sorted(cor_order_index, key=lambda x: x[0])
-    max_order_indices = [(int(o), int(i)) for (_, o, i) in cor_order_index][-n:]
+    max_order_indices = [(int(o), int(i)) for (_, o, i) in cor_order_index][-size:]
 
     subset = [[] for _ in range(n_samples - order)]
     for o, i in max_order_indices:
@@ -280,25 +315,28 @@ def subset_correlation(target, features, n, cut_off=0.05, order=1):
     return np.array(subset)
 
 
-def subset_mutual_information(target, features, n, cut_off=0.05, order=1):
+def subset_mutual_information(target, features, size, cut_off=0.05, order=1):
     """
     Selects a subset from features with the highest mutual information
     with the target vector.
 
     Parameters:
-    - target (np.ndarray): A 2D array of samples of the target variable.
-    - features (np.ndarray): A 2D array of samples of the features to select
+    - target (numpy.ndarray): A 2D array of samples of the target variable.
+    - features (numpy.ndarray): A 2D array of samples of the features to select
     from.
-    - n (int): The desired subset size.
+    - size (int): The desired subset size.
     - cut_off (float): The cutoff value for significant correlation.
     - order (int): The order or maximum lag to consider (default is 1).
 
     Returns:
     - np.ndarray: A subset of features based on mutual information criteria.
     """
+    assert target.ndim == features.ndim == 2, 'Target and feature samples must be 2D arrays'
+    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
 
     n_samples = target.shape[0]
     n_features = features.shape[1]
+
     # compute mutual information between y and every lag and feature in z
     mi_matrix = np.zeros((order, n_features))
     for o in range(1, order + 1):
@@ -309,7 +347,7 @@ def subset_mutual_information(target, features, n, cut_off=0.05, order=1):
     # discard insignificant mutual information
     mi_order_index = mi_order_index[mi_order_index[:, 0] >= cut_off]
     mi_order_index = sorted(mi_order_index, key=lambda x: x[0])
-    max_order_indices = [(int(o), int(i)) for (_, o, i) in mi_order_index][-n:]
+    max_order_indices = [(int(o), int(i)) for (_, o, i) in mi_order_index][-size:]
 
     subset = [[] for _ in range(n_samples - order)]
     for o, i in max_order_indices:
@@ -318,26 +356,28 @@ def subset_mutual_information(target, features, n, cut_off=0.05, order=1):
     return np.array(subset)
 
 
-def subset_PC(target, features, n, cut_off=0.05, order=1):
+def subset_PC(target, features, size, cut_off=0.05, order=1):
     """
     Iteratively builds a subset from features using parial correlation.
     In the first iteration the variabel with the highest normal correlation
     is selected and added to a set S. In the following iterations the variable
     with the highest correlation controlling for S will be selected and added.
-    This ensures that the subset has low internal corrlation but high 
-    correlation to the target. The 
+    This ensures that the subset has low internal corrlation but high
+    correlation with the target vector.
 
     Parameters:
-    - target (np.ndarray): A array of samples of the target variable.
-    - features (np.ndarray): A 2D array of samples of the features to select
+    - target (numpy.ndarray): A 2D array of samples of the target variable.
+    - features (numpy.ndarray): A 2D array of samples of the features to select
     from.
-    - n (int): The desired subset size.
+    - size (int): The desired subset size.
     - cut_off (float): The cutoff value for significant correlation.
     - order (int): The order or maximum lag to consider (default is 1).
 
     Returns:
     - np.ndarray: A subset of features based on mutual information criteria.
     """
+    assert target.ndim == features.ndim == 2, 'Target and feature samples must be 2D arrays'
+    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
 
     n_samples = target.shape[0]
     n_features = features.shape[1]
@@ -347,7 +387,7 @@ def subset_PC(target, features, n, cut_off=0.05, order=1):
 
     # iteratively build set causally conditioned on by selecting variables
     # that have highest partial correlation given the already selected variables
-    for i in range(n):
+    for i in range(size):
         partial_cor = np.zeros((order, n_features))
 
         # calculate partial correlation controlling for selected for each lag
@@ -399,7 +439,8 @@ def partial_correlation(target, features, control):
     - control (numpy.ndarray): 2D array, n x p matrix of control variables.
 
     Returns:
-    - partial_corrs (numpy.ndarray): 1D array, partial correlations for each feature.
+    - partial_corrs (numpy.ndarray): 1D array, partial correlations for each
+    feature.
     """
     assert target.ndim == 1, 'Target vector must be one-dimensional'
     assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
@@ -423,9 +464,9 @@ def partial_correlation(target, features, control):
     return partial_corrs
 
 
-def get_lagged_returns(returns, lags):
+def get_lagged_samples(samples, lags):
     """
-    Transform a list of return samples with corresponding lag pairs into
+    Transform a list of samples with corresponding lag pairs into
     lagged time series data.
 
     Example:
@@ -435,24 +476,25 @@ def get_lagged_returns(returns, lags):
 
 
     Parameters:
-    - returns (numpy.ndarray): List of return samples.
+    - samples (numpy.ndarray): A 2D array of return samples.
     - lags (list of tuples): List of lag pairs [(f0, l0), (f1, l1), (f2, l2), ...] with f_i < l_i.
 
     Returns:
-    - lagged_returns (numpy.ndarray): Lagged time series data.
+    - lagged_samples (numpy.ndarray): Lagged time series data.
     """
-    n_features = len(returns[0])
+    n_samples = samples.shape[0]
+    n_features = samples.shape[1]
     max_lag = max([t[1] for t in lags]) if lags != [] else 0
 
     assert n_features == len(lags)
-    assert max_lag < len(returns)
+    assert max_lag < samples.shape[0]
 
-    lagged_returns = [[] for _ in range(len(returns) - max_lag)]
+    lagged_samples = [[] for _ in range(n_samples - max_lag)]
 
     # extract values of feature for each lag pair and add to lagged_returns
     for feature, (first, furthest) in enumerate(lags):
-        lagged_feature = np.array([returns[max_lag - k: -k if k > 0 else None, feature] for k in range(first, furthest + 1)])
-        lagged_returns = np.hstack((lagged_returns, lagged_feature.transpose()))
+        lagged_feature = np.array([samples[max_lag - k: -k if k > 0 else None, feature] for k in range(first, furthest + 1)])
+        lagged_samples = np.hstack((lagged_samples, lagged_feature.transpose()))
 
-    return lagged_returns
+    return lagged_samples
 
