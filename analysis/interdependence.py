@@ -141,9 +141,12 @@ def time_varying_di(window_size, step_size, x, y, z=None, order=1, subset_select
     Parameters:
     - window_size (int): The size of the rolling window.
     - step_size (int): The step size for moving the rolling window.
-    - x (numpy.ndarray): The first time series (X).
-    - y (numpy.ndarray): The second time series (Y).
-    - z (numpy.ndarray or None): The third time series (Z), or None if not conditioned on Z.
+    - x (numpy.ndarray): A 2D array of time series data of form [[x1], [x2], ...].
+    - y (numpy.ndarray): A 2D array of time series data of form [[y1], [y2], ...].
+    - z (numpy.ndarray or None): A 2D array of time series data causally
+    conditioned on of form [[a1, b1, ...],
+                            [a2, b2, ...],
+                            ...]
     - order (int): The memory order (lag) for DI estimation (default is 1).
     - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
     - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
@@ -497,4 +500,3 @@ def get_lagged_samples(samples, lags):
         lagged_samples = np.hstack((lagged_samples, lagged_feature.transpose()))
 
     return lagged_samples
-
