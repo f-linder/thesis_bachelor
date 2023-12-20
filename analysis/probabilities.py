@@ -32,7 +32,8 @@ def pdf(estimator, samples):
                                                   ...              ]
 
     Returns:
-    - density_function (function): A function taking a list of values [x, y, ...] and calculating Pr(X=x, Y=y, ...)
+    - density_function (function): A function taking a list of values
+    corresponding to the samples [x, y, ...] and calculating Pr(X=x, Y=y, ...).
     """
     assert samples.ndim == 2, 'Sample array must be 2 dimensional'
 

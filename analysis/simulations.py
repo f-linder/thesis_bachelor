@@ -62,9 +62,9 @@ class VAR:
             c = np.where(abs_c >= coefficient_threshold, c, 0)
 
             # get coefficients in companion form: VAR(p) -> VAR(1)
-            var1 = c[0] if self.order == 1 else utils.reduce_to_VAR1(c)
+            var1 = c[0] if self.order == 1 else reduce_to_VAR1(c)
 
-            if utils.is_stable(var1):
+            if is_stable(var1):
                 self.companion_matrix = var1
                 break
 
@@ -237,6 +237,57 @@ class VAR:
             rep += f'A_{1 + i} = \n' + coefficients[i].__repr__() + '\n'
 
         return rep
+
+
+def reduce_to_VAR1(coefficients):
+    """
+    Reduce the coefficient matrix of a VAR(p) model to coefficients of a VAR(1)
+    model, the companion form. The matrix is of shape (p x n_vars x n_vars).
+
+    Parameters:
+    - coefficients (numpy.ndarray): The 3D coefficient array of a VAR(p) model.
+
+    Returns:
+    - F (numpy.ndarray): The coefficient matrix for VAR(1) in companion form.
+    """
+    assert coefficients.ndim == 3, 'Coefficient matrix must be 3-dimensional'
+    assert coefficients.shape[1] == coefficients.shape[2], 'Coefficient matrix must be of shape (p x n_vars x n_vars)'
+
+    p = coefficients.shape[0]
+    n_vars = coefficients.shape[1]
+
+    if p == 1:
+        return coefficients[0]
+
+    F_upper = np.hstack(coefficients)
+    F_lower = np.eye(n_vars * (p - 1), n_vars * p)
+    F = np.vstack((F_upper, F_lower))
+
+    return F
+
+
+def is_stable(companion_matrix, threshold=0.9):
+    """
+    Checks whether the VAR model corresponding to the companion_matrix is
+    stable. The maximum eigenvalue has to be non-zero and less or equal to
+    the threshold.
+
+    Parameters:
+    - companion_matrix (numpy.ndarray): A 2D array containing the coefficients
+    of every order.
+    - threshold (float): The threshold for the largest eigenvalue (default is 0.9).
+
+    Returns:
+    - boolean: True if model is stable, False otherwise.
+    """
+    assert companion_matrix.ndim == 2, 'Companion matrix must be 2-dimensional'
+    assert companion_matrix.shape[0] == companion_matrix.shape[1], 'Companion matrix must be of shape (m x m)'
+    assert threshold < 1, 'Stability not guaranteed for a threshold >= 1.'
+
+    eigenvalues = np.linalg.eigvals(companion_matrix)
+    max = np.max(np.abs(eigenvalues))
+
+    return True if max != 0 and max <= 0.9 else False
 
 
 class NVAR:

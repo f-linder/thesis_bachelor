@@ -18,23 +18,21 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
                                       - H(Y_t-l^t-1, Z_t-l^t-1)]
 
     Parameters:
-    - x (numpy.ndarray): A 2D array of time series data of form [[x1], [x2], ...].
-    - y (numpy.ndarray): A 2D array of time series data of form [[y1], [y2], ...].
-    - z (numpy.ndarray or None): A 2D array of time series data causally
+    - x (numpy.ndarray): The first time series of form [[x1], [x2], ...].
+    - y (numpy.ndarray): The second time series of form [[y1], [y2], ...].
+    - z (numpy.ndarray or None): A set of time series causally
     conditioned on of form [[a1, b1, ...],
                             [a2, b2, ...],
                             ...]
     - order (int): The memory (or lag) for DI estimation (default is 1).
     - subset_selection (SubsetSelection): Subset selection policy used to
-    determine set causally conditioned on.
-    - estimator (object): An estimator for probability density functions
-    (e.g., KDE or KNN).
+    determine set causally conditioned on and reduce dimensionality.
+    - estimator (KDE or KNN): An estimator for probability density functions.
 
     Returns:
     - di (float): The estimated Directed Information I(X -> Y || Z).
     """
     assert x.shape[0] == y.shape[0], 'Sample size of x and y must match'
-    assert x.ndim == y.ndim == 2, 'x and y must be 2-dimensional arrays'
 
     # (X_t-l^t-1)
     x_lagged = get_lagged_samples(x, [(1, order)])
@@ -63,7 +61,7 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     pdf_ytyz = prob.pdf(estimator, ytyz)
     pdf_xyz = prob.pdf(estimator, xyz)
     pdf_ytyxz = prob.pdf(estimator, ytyxz)
-    pdf_yz = (lambda x: 1)if len(z[0]) == 0 and len(y_lagged[0]) == 0 else prob.pdf(estimator, yz)
+    pdf_yz = (lambda x: 1) if len(z[0]) == 0 and len(y_lagged[0]) == 0 else prob.pdf(estimator, yz)
 
     T = len(x) - order
     di = 0.0
@@ -91,16 +89,15 @@ def directed_information_graph(samples, labels=None, threshold=0.05, order=1, su
 
     Parameters:
     - samples (numpy.ndarray): A 2D array of time series data, where each row
-    represents a sample and each column a variable [[x1, y1, ...],
-                                                    [x2, y2, ...],
+    represents a sample and each column a variable [[x1, y1, z1, ...],
+                                                    [x2, y2, z2, ...],
                                                     ...].
     - labels (list or None): A list of labels for each variable (optional).
     - threshold (float): The threshold for DI in graph (default is 0.05).
     - order (int): The memory order (lag) for DI estimation (default is 1).
     - subset_selection (object): Subset selection policy used to determine set
     causally conditioned on.
-    - estimator (object): An estimator for probability density functions
-    (KDE or KNN).
+    - estimator (KDE or KNN): An estimator for probability density functions .
 
     Returns:
     - di_matrix (numpy.ndarray): A matrix containing DI values between
@@ -141,21 +138,22 @@ def time_varying_di(window_size, step_size, x, y, z=None, order=1, subset_select
     Parameters:
     - window_size (int): The size of the rolling window.
     - step_size (int): The step size for moving the rolling window.
-    - x (numpy.ndarray): A 2D array of time series data of form [[x1], [x2], ...].
-    - y (numpy.ndarray): A 2D array of time series data of form [[y1], [y2], ...].
+    - x (numpy.ndarray): The first time series of form [[x1], [x2], ...].
+    - y (numpy.ndarray): The second time series of form [[y1], [y2], ...].
     - z (numpy.ndarray or None): A 2D array of time series data causally
     conditioned on of form [[a1, b1, ...],
                             [a2, b2, ...],
                             ...]
     - order (int): The memory order (lag) for DI estimation (default is 1).
-    - subset_selection (object): Subset selection policy used to determine set causally conditioned on.
-    - estimator (object): An estimator for probability density functions (e.g., KDE or KNN).
+    - subset_selection (object): Subset selection policy used to determine set
+    causally conditioned on and reduce dimensionality.
+    - estimator (KDE or KNN): An estimator for probability density functions.
 
     Returns:
-    - di (numpy.ndarray): A list of time-varying Directed Information values for each window.
+    - di (numpy.ndarray): A list of time-varying Directed Information values
+    for each window.
     """
     assert x.shape[0] == y.shape[0], 'Sample size of x and y must match'
-    assert x.ndim == y.ndim == 2, 'x and y must be 2-dimensional arrays'
 
     di = []
     num_steps = (len(x) - window_size) // step_size
@@ -198,9 +196,8 @@ def time_varying_dig(samples, window_size, step_size, order=1, subset_selection=
     - step_size (int): The step size for moving the rolling window.
     - order (int): The memory order (lag) for DI estimation (default is 1).
     - subset_selection (object): Subset selection policy used to determine set
-    causally conditioned on.
-    - estimator (object): An estimator for probability density functions
-    (e.g., KDE or KNN).
+    causally conditioned on and reduce dimensionality.
+    - estimator (KDE or KNN): An estimator for probability density functions.
 
     Returns:
     - di_matrix (numpy.ndarray): A 3D list of time-varying DI
@@ -247,7 +244,8 @@ class Policies(Enum):
 
 def select_subset(target, features, subset_selection, order=1):
     """
-    Returns a subset of z according to the given subset_selection object.
+    Selects a subset of features in regards to target given the subset
+    selction policy.
 
     Parameters:
     - target (numpy.ndarray): A 2D array of samples (of one variable).
@@ -474,13 +472,16 @@ def get_lagged_samples(samples, lags):
 
     Example:
     Turns (X_t, Y_t, Z_t, ...) with [(f0, l0), (f1, l1), (f2, l2), ...]
-    into (X_t_l0^t-f0, Y_t-l1^t-f2, Z_t-l2^t-f2, ...) or in python notation
+    into (X_t-l0^t-f0, Y_t-l1^t-f2, Z_t-l2^t-f2, ...) or in python notation
     (X[t-l0 : t-f0+1], Y[t-l1 : t-f1+1], Z[t-l2 : t-f2+1], ...)
 
 
     Parameters:
-    - samples (numpy.ndarray): A 2D array of return samples.
-    - lags (list of tuples): List of lag pairs [(f0, l0), (f1, l1), (f2, l2), ...] with f_i < l_i.
+    - samples (numpy.ndarray): A 2D array, where each row represents a sample
+    and each column a variable.
+    - lags (list of tuples): List of lag pairs [(f0, l0), (f1, l1), (f2, l2), ...]
+    with f_i < l_i, where f_i and l_i are first and last lag included for the
+    i-th variable.
 
     Returns:
     - lagged_samples (numpy.ndarray): Lagged time series data.

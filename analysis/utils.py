@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from graphviz import Digraph
-from enum import Enum
 
 
 '''
@@ -14,17 +13,12 @@ from enum import Enum
 '''
 
 
-class Index(Enum):
-    SP100 = 1
-    SP500 = 2
-
-
 def download_index(index, start_date, end_date, interval='1d'):
     """
     Download historical stock price data for a specified index.
 
     Parameters:
-    - index (Index): An Index enum value (SP100 or SP500).
+    - index ('S&P100' or 'S&P500'): The index selected for download.
     - start_date (datetime): The start date for data download.
     - end_date (datetime): The end date for data download.
     - interval (str): The data interval (default is '1d' for daily).
@@ -33,14 +27,15 @@ def download_index(index, start_date, end_date, interval='1d'):
     - tickers (dictionary): A dictionary mapping each ticker symbol to its
     returns in percent.
     """
+    assert index in ['S&P100', 'S&P500']
 
-    if index == Index.SP100:
+    if index == 'S&P100':
         print('Selected S&P100 data set:')
         tickers = pd.read_csv('./data/sp100.csv')['Symbol']
         download_tickers(tickers, start_date, end_date, interval)
         return tickers
 
-    elif index == Index.SP500:
+    elif index == 'S&P500':
         print('Selected S&P500 data set:')
         tickers = pd.read_csv('./data/sp500.csv')['Symbol']
         download_tickers(tickers, start_date, end_date, interval)
@@ -117,64 +112,6 @@ def clean_up():
 
 '''
 ##################################################################
-            utils for simulations of VAR(p) models
-##################################################################
-'''
-
-
-def reduce_to_VAR1(coefficients):
-    """
-    Reduce the coefficient matrix of a VAR(p) model to coefficients of a VAR(1)
-    model, the companion form. The matrix is of shape (p x n_vars x n_vars).
-
-    Parameters:
-    - coefficients (numpy.ndarray): The 3D coefficient array of a VAR(p) model.
-
-    Returns:
-    - F (numpy.ndarray): The coefficient matrix for VAR(1) in companion form.
-    """
-    assert coefficients.ndim == 3, 'Coefficient matrix must be 3-dimensional'
-    assert coefficients.shape[1] == coefficients.shape[2], 'Coefficient matrix must be of shape (p x n_vars x n_vars)'
-
-    p = coefficients.shape[0]
-    n_vars = coefficients.shape[1]
-
-    if p == 1:
-        return coefficients[0]
-
-    F_upper = np.hstack(coefficients)
-    F_lower = np.eye(n_vars * (p - 1), n_vars * p)
-    F = np.vstack((F_upper, F_lower))
-
-    return F
-
-
-def is_stable(companion_matrix, threshold=0.9):
-    """
-    Checks whether the VAR model corresponding to the companion_matrix is
-    stable. The maximum eigenvalue has to be non-zero and less or equal to
-    the threshold.
-
-    Parameters:
-    - companion_matrix (numpy.ndarray): A 2D array containing the coefficients
-    of every order.
-    - threshold (float): The threshold for the largest eigenvalue (default is 0.9).
-
-    Returns:
-    - boolean: True if model is stable, False otherwise.
-    """
-    assert companion_matrix.ndim == 2, 'Companion matrix must be 2-dimensional'
-    assert companion_matrix.shape[0] == companion_matrix.shape[1], 'Companion matrix must be of shape (m x m)'
-    assert threshold < 1, 'Stability not guaranteed for a threshold >= 1.'
-
-    eigenvalues = np.linalg.eigvals(companion_matrix)
-    max = np.max(np.abs(eigenvalues))
-
-    return True if max != 0 and max <= 0.9 else False
-
-
-'''
-##################################################################
                         visualization
 ##################################################################
 '''
@@ -202,9 +139,9 @@ def plot_directed_graph(draw, data, labels, threshold=0.05):
     assert len(labels) == data.shape[1]
 
     n_vars = data.shape[1]
-    graph = Digraph(format='svg', engine='fdp', graph_attr={'color': 'lightblue', 'rankdir': 'LR', 'splines': 'true'})
 
     if draw == 'dig':
+        graph = Digraph(format='svg', graph_attr={'color': 'lightblue', 'rankdir': 'LR', 'splines': 'true'})
         for i in range(n_vars):
             for j in range(n_vars):
                 influence = data[i, j]
@@ -213,6 +150,7 @@ def plot_directed_graph(draw, data, labels, threshold=0.05):
                     graph.node(labels[j], label=labels[j])
                     graph.edge(labels[i], labels[j], label=f'{influence:.3f}')
     else:
+        graph = Digraph(format='svg', engine='fdp', graph_attr={'color': 'lightblue', 'rankdir': 'LR', 'splines': 'true'})
         order = len(data)
         for i in range(n_vars):
             # time t
