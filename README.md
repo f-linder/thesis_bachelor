@@ -9,17 +9,14 @@ Abstract
 * Visualization of directed information graphs
 * Download of historical stock market data
 
-Check out the Jupyter Notebooks `demo_simulation` and `demo_real` for a demonstration of the functionality.
+Check out the Jupyter Notebooks `demo_simulation.ipynb` and `demo_real.ipynb` for a demonstration of the functionality.
 
-## Prerequisits
-### General
-* Python (tested with 3.10)
-* Graphviz (only for visualization)
-### Python packages
+## Dependencies
 * numpy
 * pandas
 * sklearn
 * matplotlib
+* graphviz
 * os
 * enum
 * yfinance
@@ -27,7 +24,7 @@ Check out the Jupyter Notebooks `demo_simulation` and `demo_real` for a demonstr
 ## Data
 
 
-## Paper: Bachelor's Thesis
+## Paper
 Author: Felix Linder\
 Supervisor: Prof. Dr. Jalal Etesami\
 Submission Date: 15.02.2024
