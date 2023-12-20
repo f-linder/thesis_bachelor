@@ -18,8 +18,8 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
                                       - H(Y_t-l^t-1, Z_t-l^t-1)]
 
     Parameters:
-    - x (numpy.ndarray): The first time series of form [[x1], [x2], ...].
-    - y (numpy.ndarray): The second time series of form [[y1], [y2], ...].
+    - x (numpy.ndarray): The first time series [x1, x2, ...].
+    - y (numpy.ndarray): The second time series [y1, y2, ...].
     - z (numpy.ndarray or None): A set of time series causally
     conditioned on of form [[a1, b1, ...],
                             [a2, b2, ...],
@@ -34,6 +34,10 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
     """
     assert x.shape[0] == y.shape[0], 'Sample size of x and y must match'
 
+    n_samples = x.shape[0]
+    x = np.array([x]).transpose()
+    y = np.array([y]).transpose()
+
     # (X_t-l^t-1)
     x_lagged = get_lagged_samples(x, [(1, order)])
     # (Y_t-l^t-1)
@@ -41,11 +45,11 @@ def directed_information(x, y, z=None, order=1, subset_selection=None, estimator
 
     # special case: I(X -> X || Z)
     if (x == y).all():
-        y_lagged = np.array([[] for _ in range(len(y) - order)])
+        y_lagged = np.array([[]] * (n_samples - order))
 
     # set z corresponding to context and subset_selection
     if z is None or len(z[0]) == 0:
-        z = np.array([[] for _ in range(len(x) - order)])
+        z = np.array([[]] * (n_samples - order))
     elif subset_selection is not None:
         z = select_subset(y, z, subset_selection, order)
     else:
@@ -112,13 +116,15 @@ def directed_information_graph(samples, labels=None, threshold=0.05, order=1, su
 
     # compute directed information for every pair
     for i in range(n_vars):
-        x = samples[:, [i]]
+        x = samples[:, i]
 
         for j in range(n_vars):
-            y = samples[:, [j]]
-            # exclude i, j from z causally conditioned on
-            cols = [r for r in range(n_vars) if r != i and r != j]
-            z = samples[:, cols]
+            y = samples[:, j]
+            # exclude i, j from set causally conditioned on
+            columns = np.ones(n_vars, dtype=np.bool_)
+            columns[i] = False
+            columns[j] = False
+            z = samples[:, columns]
 
             di = directed_information(x, y, z, order, subset_selection, estimator)
             di_matrix[i, j] = di
@@ -138,8 +144,8 @@ def time_varying_di(window_size, step_size, x, y, z=None, order=1, subset_select
     Parameters:
     - window_size (int): The size of the rolling window.
     - step_size (int): The step size for moving the rolling window.
-    - x (numpy.ndarray): The first time series of form [[x1], [x2], ...].
-    - y (numpy.ndarray): The second time series of form [[y1], [y2], ...].
+    - x (numpy.ndarray): The first time series of form [x1, x2, ...].
+    - y (numpy.ndarray): The second time series of form [y1, y2, ...].
     - z (numpy.ndarray or None): A 2D array of time series data causally
     conditioned on of form [[a1, b1, ...],
                             [a2, b2, ...],
@@ -154,9 +160,10 @@ def time_varying_di(window_size, step_size, x, y, z=None, order=1, subset_select
     for each window.
     """
     assert x.shape[0] == y.shape[0], 'Sample size of x and y must match'
+    n_samples = x.shape[0]
 
     di = []
-    num_steps = (len(x) - window_size) // step_size
+    num_steps = (n_samples - window_size) // step_size
 
     for i in range(num_steps):
         start = i * step_size
@@ -211,14 +218,17 @@ def time_varying_dig(samples, window_size, step_size, order=1, subset_selection=
 
     # compute directed information for every pair
     for i in range(n_vars):
-        x = samples[:, [i]]
-
+        x = samples[:, i]
         di_from_x = []
+
         for j in range(n_vars):
-            y = samples[:, [j]]
+            y = samples[:, j]
+
             # exclude i, j from z causally conditioned on
-            cols = [r for r in range(n_vars) if r != i and r != j]
-            z = samples[:, cols]
+            columns = np.ones(n_vars, dtype=np.bool_)
+            columns[i] = False
+            columns[j] = False
+            z = samples[:, columns]
 
             di = time_varying_di(window_size, step_size, x, y, z, order, subset_selection, estimator)
             di_from_x.append(di)
@@ -263,7 +273,7 @@ def select_subset(target, features, subset_selection, order=1):
     if subset_selection.policy == Policies.PAIRWISE:
         n_samples = target.shape[0]
         # return empty array
-        return np.array([[] for _ in range(n_samples - order)])
+        return np.array([[]] * (n_samples - order))
 
     elif subset_selection.policy == Policies.CORRELATION:
         return subset_correlation(target, features, subset_selection.n, subset_selection.cut_off, order)
