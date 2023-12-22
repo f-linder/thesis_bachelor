@@ -36,13 +36,12 @@ start_date = '2023-15-10'
 end_date = '2024-15-02'
 interval = '1d'
 
-# download stock returns of your interest, e.g. apple, google, blackrock
+# companies of your interest, e.g. apple, google, blackrock
 tickers = ['AAPL', 'GOOGL', 'BLK']
 returns = download_tickers(tickers, start_date, end_date, interval)
 
-# download every constituent to index: S&P100 or S&P500
+# download every constituent of index: S&P100 or S&P500
 index = 'S&P100'
-# index = 'S&P500'
 returns = download_index(index, start_date, end_date, interval)
 ```
 
