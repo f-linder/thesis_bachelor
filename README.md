@@ -24,7 +24,8 @@ Check out the Jupyter Notebooks `demo_simulation.ipynb` and `demo_real.ipynb` fo
 * yfinance
 
 ## Data
-The estimators are designed for continuous time series.\
+The estimators are designed for continuous time series data (such as stock returns).
+
 You can use your own datasets or acquire percentage stock returns using the functionality provided in `analysis.utils`:
 
 ```python 
@@ -35,11 +36,11 @@ start_date = '2023-15-10'
 end_date = '2024-15-02'
 interval = '1d'
 
-# download stocks of your interest, e.g. apple, google, blackrock
+# download stock returns of your interest, e.g. apple, google, blackrock
 tickers = ['AAPL', 'GOOGL', 'BLK']
 returns = download_tickers(tickers, start_date, end_date, interval)
 
-# download whole index
+# download whole dataset: S&P100 or S&P500
 index = 'S&P100'
 # index = 'S&P500'
 returns = download_index(index, start_date, end_date, interval)
