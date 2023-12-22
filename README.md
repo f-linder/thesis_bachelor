@@ -24,7 +24,7 @@ Check out the Jupyter Notebooks `demo_simulation.ipynb` and `demo_real.ipynb` fo
 * yfinance
 
 ## Data
-The estimators are designed for multiple continuous time series.
+The estimators are designed for multiple continuous time series.\
 You can use your own datasets or acquire percentage stock returns using the functionality provided in `analysis.utils`:
 
 ```python 
