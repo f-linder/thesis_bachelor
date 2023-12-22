@@ -19,8 +19,8 @@ def download_index(index, start_date, end_date, interval='1d'):
 
     Parameters:
     - index ('S&P100' or 'S&P500'): The index selected for download.
-    - start_date (datetime): The start date for data download.
-    - end_date (datetime): The end date for data download.
+    - start_date (datetime or str): The start date for data download.
+    - end_date (datetime or str): The end date for data download.
     - interval (str): The data interval (default is '1d' for daily).
 
     Returns:
@@ -29,15 +29,16 @@ def download_index(index, start_date, end_date, interval='1d'):
     """
     assert index in ['S&P100', 'S&P500']
 
+    dir = "data"
     if index == 'S&P100':
         print('Selected S&P100 data set:')
-        tickers = pd.read_csv('./data/sp100.csv')['Symbol']
+        tickers = pd.read_csv(os.path.join(dir, 'sp100.csv'))['Symbol']
         download_tickers(tickers, start_date, end_date, interval)
         return tickers
 
     elif index == 'S&P500':
         print('Selected S&P500 data set:')
-        tickers = pd.read_csv('./data/sp500.csv')['Symbol']
+        tickers = pd.read_csv(os.path.join(dir, 'sp500.csv'))['Symbol']
         download_tickers(tickers, start_date, end_date, interval)
         return tickers
 
@@ -49,8 +50,8 @@ def download_tickers(tickers, start_date, end_date, interval='1d'):
 
     Parameters:
     - tickers (list): A list of ticker symbols to download.
-    - start_date (datetime): The start date for the data download.
-    - end_date (datetime): The end date for the data download.
+    - start_date (datetime or str): The start date for the data download.
+    - end_date (datetime or str): The end date for the data download.
     - interval (str): The data interval (default is '1d' for daily).
 
     Returns:
@@ -63,9 +64,10 @@ def download_tickers(tickers, start_date, end_date, interval='1d'):
     - If a ticker's data is empty or unavailable for yfinance, it will not be
     included in the returned dictionary.
     """
-    print(f'Starting download for data of {len(tickers)} tickers...')
+    print(f'Starting download for stock data of {len(tickers)} tickers in the interval [{start_date}, {end_date}]...')
 
     ticker_returns = {}
+    dir = 'data'
     for i, ticker in enumerate(tickers):
         print(f'Downloading {ticker}: {i + 1}/{len(tickers)}')
 
@@ -77,7 +79,7 @@ def download_tickers(tickers, start_date, end_date, interval='1d'):
         data['Returns'] = data['Return Abs'] / data['Open'] * 100
 
         if not data.empty:
-            data['Returns'].to_csv(f'./data/{ticker}.csv')
+            data['Returns'].to_csv(os.path.join(dir, f'{ticker}.csv'))
             ticker_returns[ticker] = data['Returns']
 
     print('Download complete')
@@ -96,16 +98,12 @@ def clean_up():
     - None
     """
 
-    dir_path = './data'
-    for filename in os.listdir(dir_path):
-        # do not delete index .csv files
+    dir = 'data'
+    for filename in os.listdir(dir):
+        # do not delete S&P100/500 .csv files
         if filename in ['sp100.csv', 'sp500.csv', 'simulations']:
             continue
-        os.remove(os.path.join(dir_path, filename))
-
-    dir_path = '.data/simulations'
-    for filename in os.listdir(dir_path):
-        os.remove(os.path.join(dir_path, filename))
+        os.remove(os.path.join(dir, filename))
 
     print('Clean up complete: removed all .csv files')
 
