@@ -26,7 +26,7 @@ Check out the Jupyter Notebooks `demo_simulation.ipynb` and `demo_real.ipynb` fo
 ## Data
 The estimators are designed for continuous time series data (such as stock returns).
 
-You can use your own datasets or acquire percentage stock returns using the functionality provided in `analysis.utils`:
+You can use your own datasets or acquire percentage stock returns using the functionality provided:
 
 ```python 
 from analysis.utils import download_tickers, download_index
