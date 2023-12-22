@@ -40,7 +40,7 @@ interval = '1d'
 tickers = ['AAPL', 'GOOGL', 'BLK']
 returns = download_tickers(tickers, start_date, end_date, interval)
 
-# download whole dataset: S&P100 or S&P500
+# download every constituent to index: S&P100 or S&P500
 index = 'S&P100'
 # index = 'S&P500'
 returns = download_index(index, start_date, end_date, interval)
