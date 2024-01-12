@@ -399,38 +399,39 @@ def subset_PC(target, features, size, cut_off=0.05, order=1):
     # iteratively build set causally conditioned on by selecting variables
     # that have highest partial correlation given the already selected variables
     for i in range(size):
-        partial_cor = np.zeros((order, n_features))
-
-        # calculate partial correlation controlling for selected for each lag
+        pcor_order_index = []
+        control = np.array([[] for _ in range(n_samples - order)])
+ 
         for o in range(1, order + 1):
             # first step without controlling variable, use normal correlation
             if i == 0:
                 cor = np.corrcoef(target[o:], features[:-o], rowvar=False)
-                partial_cor[o - 1, :] = np.abs(cor[0, 1:])
+                cor = np.abs(cor[0, 1:])
+                
+                for i, c in enumerate(cor):
+                    pcor_order_index.append([c, o, i])
+            # calculate partial correlation controlling for selected for each lag
             else:
-                target = target.transpose()[0][order:]
-                features_indices = np.array([(o, x) not in selected for x in range(n_features)])
-                # no more features to condition on left for this lag
-                if (features_indices is False).all():
-                    break
-                features = features[order - o:-o, features_indices]
-                control = [[] for _ in range(n_samples - order)]
-                for ord, idx in selected:
-                    control = np.hstack((control, features[order - ord:-ord, [idx]]))
-
-                partial_cor[o - 1, :] = partial_correlation(target, features, control)
+                for i in range(n_features):
+                    if (o, i) not in selected:
+                        pcor = partial_correlation(target.transpose()[0][order:], features[order - o:-o, i], control)
+                        pcor_order_index.append([abs(pcor), o, i])
 
         # cut insignificant partial correlation
-        cor_order_index = np.array([(value, o + 1, i) for o, row in enumerate(partial_cor) for i, value in enumerate(row)])
-        cor_order_index = cor_order_index[cor_order_index[:, 0] >= cut_off]
+        pcor_order_index = np.array(pcor_order_index)
+        pcor_order_index = pcor_order_index[pcor_order_index[:, 0] >= cut_off]
 
         # no significant correlations left
-        if len(cor_order_index) == 0:
+        if len(pcor_order_index) == 0:
             break
 
         # add most significant to set controlled for in next iteration
-        _, max_order, max_index = sorted(cor_order_index, key=lambda x: x[0])[-1]
-        selected.append((int(max_order), int(max_index)))
+        _, max_order, max_index = sorted(pcor_order_index, key=lambda x: x[0])[-1]
+        max_order = int(max_order)
+        max_index = int(max_index)
+
+        selected.append((max_order, max_index))
+        control = np.hstack((control, features[order - max_order:-max_order, [max_index]]))
 
     subset = [[] for _ in range(n_samples - order)]
     for o, i in selected:
@@ -439,40 +440,30 @@ def subset_PC(target, features, size, cut_off=0.05, order=1):
     return np.array(subset)
 
 
-def partial_correlation(target, features, control):
+def partial_correlation(x, y, control):
     """
-    Calculate partial correlations between the target and each feature
+    Calculate partial correlations between X and Y
     while controlling for the specified variables.
 
     Parameters:
-    - target (numpy.ndarray): 1D array, target variable with n samples.
-    - features (numpy.ndarray): 2D array, n x d matrix of features.
+    - x (numpy.ndarray): 1D array of first variable with n samples.
+    - y (numpy.ndarray): 1D array of second variable with n samples.
     - control (numpy.ndarray): 2D array, n x p matrix of control variables.
 
     Returns:
     - partial_corrs (numpy.ndarray): 1D array, partial correlations for each
     feature.
     """
-    assert target.ndim == 1, 'Target vector must be one-dimensional'
-    assert target.shape[0] == features.shape[0], 'Sample size of target and features must match'
-    assert target.shape[0] == control.shape[0], 'Sample size of target and control must match'
+    assert x.ndim == y.ndim == 1, 'x and y must be one-dimensional'
+    assert x.shape[0] == y.shape[0] == control.shape[0], 'Sample sizes of x, y and all control variables must match'
 
-    matrix = np.hstack((features, np.array([target]).transpose(), control))
+    x = np.array([x]).transpose()
+    y = np.array([y]).transpose()
+    matrix = np.hstack((x, y, control))
     corr = np.corrcoef(matrix, rowvar=False)
     corr_inv = np.linalg.inv(corr)
 
-    dim = features.shape[1]
-    partial_corrs = np.zeros(dim)
-
-    # j = dim is index of target vector
-    for i in range(dim):
-        p_ij = corr_inv[i, dim]
-        p_ii = corr_inv[i, i]
-        p_jj = corr_inv[dim, dim]
-
-        partial_corrs[i] = -p_ij / np.sqrt(p_ii * p_jj)
-
-    return partial_corrs
+    return -corr_inv[0, 1] / np.sqrt(corr_inv[0, 0] * corr_inv[1, 1])
 
 
 def get_lagged_samples(samples, lags):
