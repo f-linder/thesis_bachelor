@@ -248,7 +248,7 @@ class Policies(Enum):
     PAIRWISE = 1
     CORRELATION = 2
     MUTUAL_INFORMATION = 3
-    PC_ALGORITHM = 4
+    ITERATIVE_PCOR = 4
 
 
 def select_subset(target, features, subset_selection, order=1):
@@ -280,8 +280,8 @@ def select_subset(target, features, subset_selection, order=1):
     elif subset_selection.policy == Policies.MUTUAL_INFORMATION:
         return subset_mutual_information(target, features, subset_selection.n, subset_selection.cut_off, order)
 
-    elif subset_selection.policy == Policies.PC_ALGORITHM:
-        return subset_PC(target, features, subset_selection.n, subset_selection.cut_off, order)
+    elif subset_selection.policy == Policies.ITERATIVE_PCOR:
+        return subset_pcor(target, features, subset_selection.n, subset_selection.cut_off, order)
 
 
 def subset_correlation(target, features, size, cut_off=0.05, order=1):
@@ -366,7 +366,7 @@ def subset_mutual_information(target, features, size, cut_off=0.05, order=1):
     return np.array(subset)
 
 
-def subset_PC(target, features, size, cut_off=0.05, order=1):
+def subset_pcor(target, features, size, cut_off=0.05, order=1):
     """
     Iteratively builds a subset from features using parial correlation.
     In the first iteration the variabel with the highest normal correlation
