@@ -33,14 +33,14 @@ def download_index(index, start_date, end_date, interval='1d'):
     if index == 'S&P100':
         print('Selected S&P100 data set:')
         tickers = pd.read_csv(os.path.join(dir, 'sp100.csv'))['Symbol']
-        download_tickers(tickers, start_date, end_date, interval)
-        return tickers
+        # tickers = pd.read_csv('data/sp100.csv')['Symbol']
+        return download_tickers(tickers, start_date, end_date, interval)
+        
 
     elif index == 'S&P500':
         print('Selected S&P500 data set:')
         tickers = pd.read_csv(os.path.join(dir, 'sp500.csv'))['Symbol']
-        download_tickers(tickers, start_date, end_date, interval)
-        return tickers
+        return download_tickers(tickers, start_date, end_date, interval)
 
 
 def download_tickers(tickers, start_date, end_date, interval='1d'):

@@ -229,7 +229,6 @@ def time_varying_dig(samples, window_size, step_size, order=1, subset_selection=
             columns[i] = False
             columns[j] = False
             z = samples[:, columns]
-
             di = time_varying_di(window_size, step_size, x, y, z, order, subset_selection, estimator)
             di_from_x.append(di)
 
@@ -418,8 +417,7 @@ def subset_PC(target, features, size, cut_off=0.05, order=1):
                         pcor_order_index.append([abs(pcor), o, i])
 
         # cut insignificant partial correlation
-        pcor_order_index = np.array(pcor_order_index)
-        pcor_order_index = pcor_order_index[pcor_order_index[:, 0] >= cut_off]
+        pcor_order_index = list(filter(lambda x: x[0] >= cut_off, pcor_order_index))
 
         # no significant correlations left
         if len(pcor_order_index) == 0:
